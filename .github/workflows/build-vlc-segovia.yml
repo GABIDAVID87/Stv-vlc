@@ -1,4 +1,4 @@
-name: Build VLC Segovia TV
+name: Stv
 
 on:
   workflow_dispatch:
