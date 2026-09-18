@@ -80,8 +80,6 @@ class ExternalPlayerLauncher(private val activity: Activity) {
     // ============================================================
     // SERIE: ENVÍA LOS 4 CAPÍTULOS DIRECTAMENTE A RCTV
     // ============================================================
-    // Se conserva el nombre playM3U para no tocar SeriesScreen.
-    // Ya no crea ni abre ningún archivo M3U.
     fun playM3U(
         urls: List<String>,
         titles: List<String>,
@@ -145,6 +143,7 @@ class ExternalPlayerLauncher(private val activity: Activity) {
         } catch (_: Exception) {
             Toast.makeText(activity, "No se pudo abrir el reproductor VLC integrado", Toast.LENGTH_LONG).show()
         }
+    } // <-- LLAVE DE CIERRE AGREGADA AQUÍ
 
     // ============================================================
     // PELÍCULA INDIVIDUAL — SE CONSERVA EL CAMINO DIRECTO
