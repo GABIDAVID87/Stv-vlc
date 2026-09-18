@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/coordinator"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- NAVEGACIÓN LATERAL -->
+    <com.google.android.material.navigationrail.NavigationRailView
+        android:id="@+id/navigation_rail"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        app:labelVisibilityMode="labeled"
+        app:elevation="4dp"
+        app:headerLayout="@layout/navigation_rail_fab"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        app:menu="@menu/bottom_navigation"
+        app:itemIconTint="@android:color/transparent"
+        app:itemTextColor="#FFFF00"
+        app:itemRippleColor="#66FFFF00" />
+
+    <!-- TOOLBAR SUPERIOR -->
+    <include
+        layout="@layout/toolbar"
+        android:nextFocusLeft="@+id/ml_menu_search"
+        android:nextFocusRight="@+id/ml_menu_search"
+        android:nextFocusUp="@+id/ml_menu_search"
+        android:nextFocusDown="@+id/ml_menu_search"
+        android:nextFocusForward="@+id/ml_menu_search" />
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/fragment_placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginStart="@dimen/navigation_margin"
+        android:keyboardNavigationCluster="true"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        tools:targetApi="o" />
+
+    <!-- PROGRESO DE ESCANEO -->
+    <androidx.appcompat.widget.ViewStubCompat
+        android:id="@+id/scan_viewstub"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_anchor="@+id/navigation"
+        app:layout_anchorGravity="top"
+        android:layout_gravity="top"
+        android:layout="@layout/scan_progress" />
+
+    <!-- AUDIO PLAYER -->
+    <include
+        layout="@layout/audioplayercontainer" />
+
+    <!-- FLOATING ACTION BUTTON -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/default_margin"
+        android:tint="@color/grey50"
+        android:visibility="invisible"
+        app:useCompatPadding="true"
+        app:borderWidth="0dp"
+        app:srcCompat="@drawable/ic_fab_add"
+        app:layout_dodgeInsetEdges="bottom"
+        app:layout_anchor="@+id/navigation"
+        app:layout_anchorGravity="top|end"
+        android:layout_gravity="top|end"
+        app:layout_behavior="org.videolan.vlc.gui.helpers.FloatingActionButtonBehavior"
+        app:rippleColor="#FFFF00" />
+
+    <!-- NAVEGACIÓN INFERIOR -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/navigation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="#000000"
+        app:elevation="16dp"
+        app:itemIconTint="@android:color/transparent"
+        app:itemTextColor="#FFFF00"
+        app:itemRippleColor="#66FFFF00"
+        app:labelVisibilityMode="labeled"
+        app:layout_behavior="org.videolan.vlc.gui.helpers.BottomNavigationBehavior"
+        app:layout_insetEdge="bottom"
+        app:menu="@menu/bottom_navigation" />
+
+    <!-- CONSEJOS DEL REPRODUCTOR -->
+    <androidx.appcompat.widget.ViewStubCompat
+        android:id="@+id/audio_player_tips"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout="@layout/audio_player_tips" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

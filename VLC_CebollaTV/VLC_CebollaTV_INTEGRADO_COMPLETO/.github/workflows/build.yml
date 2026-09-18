@@ -1,0 +1,33 @@
+name: Compilar SEGOVIA TV
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Descargar repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Dar permisos a Gradle
+      run: chmod +x gradlew
+
+    - name: Compilar APK Debug
+      run: ./gradlew :app:assembleDebug --no-daemon
+
+    - name: Guardar APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: SegoviaTV-APK
+        path: application/app/build/outputs/apk/debug/*.apk
+        

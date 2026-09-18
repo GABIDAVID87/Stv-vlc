@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="32px"
+     height="32px"
+     viewBox="0 0 512 512">
+
+<rect width="512" height="512" fill="#000000"/>
+
+<!-- Antenas -->
+<g fill="none" stroke="#ffff00" stroke-width="14" stroke-linecap="round">
+    <path d="M250 115 L190 55"/>
+    <path d="M262 115 L322 55"/>
+</g>
+
+<circle cx="185" cy="50" r="14" fill="#ffff00"/>
+<circle cx="327" cy="50" r="14" fill="#ffff00"/>
+
+<!-- Marco TV -->
+<path
+d="M115 145
+C85 150 65 185 65 245
+L65 330
+C65 385 105 420 165 425
+C230 430 282 430 350 425
+C410 420 447 385 447 330
+L447 245
+C447 185 425 150 395 145
+C300 125 210 125 115 145Z"
+fill="none"
+stroke="#ffff00"
+stroke-width="26"
+stroke-linejoin="round"/>
+
+<!-- Patas -->
+<path
+d="M155 420
+L145 458
+L170 452
+L175 420Z"
+fill="#ffff00"/>
+
+<path
+d="M357 420
+L337 420
+L342 452
+L367 458Z"
+fill="#ffff00"/>
+
+<!-- R -->
+<text
+x="256"
+y="365"
+text-anchor="middle"
+font-family="Times New Roman, Georgia, serif"
+font-size="245"
+font-weight="bold"
+fill="#ffff00">
+R
+</text>
+
+</svg>

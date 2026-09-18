@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>  <vector xmlns:android="http://schemas.android.com/apk/res/android"  
+android:width="108dp"  
+android:height="108dp"  
+android:viewportWidth="108"  
+android:viewportHeight="108">
+
+<!-- Fondo negro -->  
+<path  
+    android:fillColor="#000000"  
+    android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />  
+
+<!-- Círculo amarillo exterior -->  
+<path  
+    android:fillColor="#FFFF00"  
+    android:pathData="M54,2  
+                      A52,52 0,1 1,54,106  
+                      A52,52 0,1 1,54,2" />  
+
+<!-- Círculo negro interior -->  
+<path  
+    android:fillColor="#000000"  
+    android:pathData="M54,18  
+                      A37,37 0,1 1,54,92  
+                      A37,37 0,1 1,54,18" />  
+
+<!-- TELEVISOR -->  
+<group  
+    android:translateY="5">  
+
+    <!-- Cuerpo de la TV -->  
+    <path  
+        android:fillColor="#FFFF00"  
+        android:pathData="M46,30  
+                          L44,32  
+                          L46,34  
+                          L47,34  
+                          L51,38  
+                          L51,39  
+                          L50,40  
+                          L39,40  
+                          L37,42  
+                          L37,60  
+                          L40,62  
+                          L52,62  
+                          L53,63  
+                          L52,65  
+                          L45,65  
+                          L45,66  
+                          L64,66  
+                          L64,65  
+                          L57,65  
+                          L56,63  
+                          L57,62  
+                          L69,62  
+                          L72,60  
+                          L72,41  
+                          L71,40  
+                          L59,40  
+                          L58,39  
+                          L58,38  
+                          L65,32  
+                          L64,30  
+                          L62,30  
+                          L61,31  
+                          L61,33  
+                          L55,39  
+                          L54,39  
+                          L48,33  
+                          L48,30  
+                          Z" />  
+
+    <!-- Pantalla negra -->  
+    <path  
+        android:fillColor="#000000"  
+        android:pathData="M39,44  
+                          L41,42  
+                          L68,42  
+                          L70,44  
+                          L70,58  
+                          L68,60  
+                          L41,60  
+                          L39,58  
+                          Z" />  
+
+    <!-- Antena izquierda -->  
+    <path  
+        android:fillColor="#000000"  
+        android:pathData="M47,24  
+                          L41,26  
+                          L37,24  
+                          L39,22  
+                          Z" />  
+
+    <!-- Antena derecha -->  
+    <path  
+        android:fillColor="#000000"  
+        android:pathData="M61,26  
+                          L67,24  
+                          L69,22  
+                          L71,24  
+                          Z" />  
+
+</group>  
+
+<!-- R blanca -->  
+<path  
+    android:fillColor="#FFFFFF"  
+    android:pathData="M49,53  
+                      L49,47  
+                      L56,47  
+                      C59,47 61,49 61,51.5  
+                      C61,53.3 60,54.6 58.5,55.2  
+                      L62,61  
+                      L58.5,61  
+                      L55.5,55.8  
+                      L52.5,55.8  
+                      L52.5,61  
+                      L49,61  
+                      Z  
+                      M52.5,49.7  
+                      L52.5,53.1  
+                      L55.5,53.1  
+                      C56.8,53.1 57.5,52.4 57.5,51.4  
+                      C57.5,50.4 56.8,49.7 55.5,49.7  
+                      Z" />
+
+</vector>  Me podés mostrar está imagen

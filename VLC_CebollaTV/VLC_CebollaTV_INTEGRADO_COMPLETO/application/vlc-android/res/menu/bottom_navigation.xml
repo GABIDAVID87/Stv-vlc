@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/nav_video"
+        android:title="@string/video" />
+
+    <item
+        android:id="@+id/nav_audio"
+        android:title="@string/audio" />
+
+    <item
+        android:id="@+id/nav_directories"
+        android:title="@string/browse" />
+
+    <item
+        android:id="@+id/nav_playlists"
+        android:title="@string/playlists" />
+
+    <item
+        android:id="@+id/nav_more"
+        android:title="@string/more" />
+
+</menu>

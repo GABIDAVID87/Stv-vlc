@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<com.google.android.material.appbar.AppBarLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/appbar"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#000000"
+    android:elevation="0dp"
+    app:elevation="0dp">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/main_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="#000000"
+        android:keyboardNavigationCluster="true"
+        app:layout_scrollFlags="scroll|enterAlways|snap"
+        app:navigationContentDescription="@string/abc_action_bar_up_description"
+        app:navigationIcon="?attr/homeAsUpIndicator"
+        app:popupTheme="@style/Toolbar.VLC"
+        app:theme="@style/Toolbar.VLC"
+        app:titleTextColor="#FFFF00"
+        app:titleMarginStart="@dimen/default_margin"
+        tools:targetApi="o">
+
+        <!-- Se conserva porque el código Kotlin puede utilizar esta vista,
+             pero el icono queda completamente oculto. -->
+        <ImageView
+            android:id="@+id/toolbar_icon"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_incognito" />
+
+        <!-- Título principal -->
+        <TextView
+            android:id="@+id/toolbar_vlc_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:importantForAccessibility="no"
+            android:text="SEGOVIA TV"
+            android:textColor="#FFFF00"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium" />
+
+    </com.google.android.material.appbar.MaterialToolbar>
+
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/ariane"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingStart="16dp"
+        android:clipToPadding="false"
+        android:visibility="gone"
+        app:layout_scrollFlags="scroll|enterAlways" />
+
+
+    <include
+        layout="@layout/tab_layout"
+        android:visibility="gone" />
+
+
+</com.google.android.material.appbar.AppBarLayout>
