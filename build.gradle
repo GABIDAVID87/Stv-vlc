@@ -17,9 +17,10 @@ buildscript {
     }
 }
 
-plugins {
-    id 'com.google.devtools.ksp' version '2.2.21-1.0.31' apply false
-}
+// Bloque comentado para evitar el error de repositorios en GitHub Actions
+// plugins {
+//     id 'com.google.devtools.ksp' version '2.2.21-1.0.31' apply false
+// }
 
 allprojects {
     repositories {
