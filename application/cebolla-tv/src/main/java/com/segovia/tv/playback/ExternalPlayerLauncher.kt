@@ -1,7 +1,6 @@
 package com.segovia.tv.playback
 
 import android.app.Activity
-import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -35,7 +34,7 @@ class ExternalPlayerLauncher(private val activity: Activity) {
 
         const val EXTRA_SEGOVIA_SERIES_TITLE = "segovia_series_title"
         const val EXTRA_SEGOVIA_SEASON = "segovia_season"
-        const val EXTRA_SEGOVIA_EPISODE = "segovia_episode"
+        const val EXTRA_SEGOVIA_EPISODE = "segovia_season"
 
         const val EXTRA_SEGOVIA_PROGRESS_JSON = "segovia_progress_json"
     }
@@ -85,7 +84,9 @@ class ExternalPlayerLauncher(private val activity: Activity) {
     private fun normalizeUrl(raw: String): String {
         val url = raw.trim()
 
-        if (url.isBlank()) return ""
+        if (url.isBlank()) {
+            return ""
+        }
 
         if (url.startsWith("/video?")) {
             return WORKER + url
@@ -115,32 +116,22 @@ class ExternalPlayerLauncher(private val activity: Activity) {
     }
 
     /**
-     * Abre el VideoPlayerActivity de VLC INTEGRADO
+     * Abre directamente la VideoPlayerActivity de VLC INTEGRADO
      * dentro del mismo APK de Segovia TV.
      *
-     * IMPORTANTE:
+     * El Intent se construye directamente con Activity + clase.
      *
-     * El paquete propietario del componente debe ser el
-     * applicationId de la aplicación final.
-     *
-     * Como Segovia TV ejecuta esta Activity desde su propio APK,
-     * usamos activity.packageName y mantenemos el nombre completo
-     * de la Activity VLC.
-     *
-     * NO usamos "org.videolan.vlc" como paquete propietario,
-     * porque ese paquete puede corresponder al VLC externo
-     * instalado desde Play Store.
+     * No se utiliza ComponentName ni un Intent ACTION_VIEW implícito
+     * para determinar qué aplicación debe reproducir el contenido.
      */
     private fun vlcPlayerIntent(
         url: String,
         title: String
     ): Intent =
-        Intent(Intent.ACTION_VIEW).apply {
-
-            component = ComponentName(
-                activity.packageName,
-                "org.videolan.vlc.gui.video.VideoPlayerActivity"
-            )
+        Intent(
+            activity,
+            org.videolan.vlc.gui.video.VideoPlayerActivity::class.java
+        ).apply {
 
             setDataAndType(
                 Uri.parse(url),
