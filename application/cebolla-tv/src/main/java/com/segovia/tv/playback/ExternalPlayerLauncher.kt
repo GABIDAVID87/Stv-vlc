@@ -10,7 +10,8 @@ import android.widget.Toast
 class ExternalPlayerLauncher(private val activity: Activity) {
 
     companion object {
-        private const val WORKER = "https://segovia-tv-proxy.guadianesgalaxi.workers.dev"
+        private const val WORKER =
+            "https://segovia-tv-proxy.guadianesgalaxi.workers.dev"
 
         const val REQUEST_RCTV_PROGRESS = 7401
 
@@ -102,7 +103,8 @@ class ExternalPlayerLauncher(private val activity: Activity) {
             return WORKER + "/" + url.substringAfter("null/")
         }
 
-        if (!url.startsWith("http://") &&
+        if (
+            !url.startsWith("http://") &&
             !url.startsWith("https://") &&
             !url.contains("/")
         ) {
@@ -113,14 +115,21 @@ class ExternalPlayerLauncher(private val activity: Activity) {
     }
 
     /**
-     * Abre la VideoPlayerActivity DEL VLC INTEGRADO.
+     * Abre el VideoPlayerActivity de VLC INTEGRADO
+     * dentro del mismo APK de Segovia TV.
      *
      * IMPORTANTE:
-     * No usamos activity.packageName porque ese es el paquete
-     * de la aplicación que está ejecutando Segovia TV.
      *
-     * VideoPlayerActivity pertenece al módulo VLC:
-     * org.videolan.vlc.gui.video.VideoPlayerActivity
+     * El paquete propietario del componente debe ser el
+     * applicationId de la aplicación final.
+     *
+     * Como Segovia TV ejecuta esta Activity desde su propio APK,
+     * usamos activity.packageName y mantenemos el nombre completo
+     * de la Activity VLC.
+     *
+     * NO usamos "org.videolan.vlc" como paquete propietario,
+     * porque ese paquete puede corresponder al VLC externo
+     * instalado desde Play Store.
      */
     private fun vlcPlayerIntent(
         url: String,
@@ -129,7 +138,7 @@ class ExternalPlayerLauncher(private val activity: Activity) {
         Intent(Intent.ACTION_VIEW).apply {
 
             component = ComponentName(
-                "org.videolan.vlc",
+                activity.packageName,
                 "org.videolan.vlc.gui.video.VideoPlayerActivity"
             )
 
@@ -150,7 +159,7 @@ class ExternalPlayerLauncher(private val activity: Activity) {
         }
 
     // ============================================================
-    // SERIE: ENVÍA LOS CAPÍTULOS DIRECTAMENTE AL VLC INTEGRADO
+    // SERIE: ENVÍA HASTA 6 CAPÍTULOS AL VLC INTEGRADO
     // ============================================================
     fun playM3U(
         urls: List<String>,
@@ -161,8 +170,9 @@ class ExternalPlayerLauncher(private val activity: Activity) {
         episode: Int? = null,
         bannerUrl: String? = null
     ) {
+
         val count = minOf(
-            4,
+            6,
             urls.size,
             titles.size
         )
