@@ -7,125 +7,127 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
 
-class ExternalPlayerLauncher(private val activity: Activity) {
+class ExternalPlayerLauncher(
+    private val activity: Activity
+) {
 
     companion object {
         private const val WORKER =
             "https://segovia-tv-proxy.guadianesgalaxi.workers.dev"
 
-        const val REQUEST_RCTV_PROGRESS = 7401
-
-        const val EXTRA_BANNER_URL = "segovia_banner_url"
-        const val EXTRA_NEXT_URL = "segovia_next_episode_url"
-        const val EXTRA_NEXT_TITLE = "segovia_next_episode_title"
-        const val EXTRA_NEXT_SEASON = "segovia_next_episode_season"
-        const val EXTRA_NEXT_EPISODE = "segovia_next_episode_number"
-
-        const val EXTRA_CONTENT_TYPE = "content_type"
         const val EXTRA_FROM_EXTERNAL = "from_external"
-
+        const val EXTRA_CONTENT_TYPE = "content_type"
         const val EXTRA_SERIES_TITLE = "series_title"
         const val EXTRA_SEASON = "season"
         const val EXTRA_EPISODE = "episode"
+        const val EXTRA_BANNER_URL = "segovia_banner_url"
+
+        const val EXTRA_NEXT_URL = "next_url"
+        const val EXTRA_NEXT_TITLE = "next_title"
+        const val EXTRA_NEXT_SEASON = "next_season"
+        const val EXTRA_NEXT_EPISODE = "next_episode"
 
         const val EXTRA_SEGOVIA_URLS = "segovia_direct_urls"
         const val EXTRA_SEGOVIA_TITLES = "segovia_direct_titles"
         const val EXTRA_SEGOVIA_POSTERS = "segovia_direct_posters"
         const val EXTRA_SEGOVIA_START_INDEX = "segovia_direct_start_index"
-
-        const val EXTRA_SEGOVIA_SERIES_TITLE = "segovia_series_title"
-        const val EXTRA_SEGOVIA_SEASON = "segovia_season"
-        const val EXTRA_SEGOVIA_EPISODE = "segovia_episode"
-
-        const val EXTRA_SEGOVIA_PROGRESS_JSON = "segovia_progress_json"
-    }
-
-    private val prefs by lazy {
-        activity.getSharedPreferences(
-            "segoviatv_player",
-            Activity.MODE_PRIVATE
-        )
-    }
-
-    fun preferredPackage(): String? =
-        prefs.getString("package", null)
-
-    fun preferredName(): String? =
-        prefs.getString("label", null)
-
-    fun save(packageName: String, label: String) {
-        prefs.edit()
-            .putString("package", packageName)
-            .putString("label", label)
-            .apply()
-    }
-
-    fun players() = activity.packageManager
-        .queryIntentActivities(
-            Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(
-                    Uri.parse("$WORKER/video?id=test"),
-                    "video/*"
-                )
-            },
-            PackageManager.MATCH_DEFAULT_ONLY
-        )
-        .filter {
-            it.activityInfo.packageName != activity.packageName
-        }
-        .distinctBy {
-            it.activityInfo.packageName
-        }
-        .sortedBy {
-            it.loadLabel(activity.packageManager)
-                .toString()
-                .lowercase()
-        }
-
-    private fun normalizeUrl(raw: String): String {
-        val url = raw.trim()
-
-        if (url.isBlank()) return ""
-
-        if (url.startsWith("/video?")) {
-            return WORKER + url
-        }
-
-        if (url.startsWith("video?")) {
-            return "$WORKER/$url"
-        }
-
-        if (url.startsWith("undefined/video?", true)) {
-            return WORKER + "/" + url.substringAfter("undefined/")
-        }
-
-        if (url.startsWith("null/video?", true)) {
-            return WORKER + "/" + url.substringAfter("null/")
-        }
-
-        if (
-            !url.startsWith("http://") &&
-            !url.startsWith("https://") &&
-            !url.contains("/")
-        ) {
-            return "$WORKER/video?id=$url"
-        }
-
-        return url
     }
 
     /**
-     * Abre directamente el VideoPlayerActivity de VLC integrado.
+     * Devuelve los reproductores externos instalados.
      *
-     * Se utiliza un Intent explícito mediante ComponentName.
-     * No se utiliza ACTION_VIEW como Intent base para esta llamada,
-     * evitando que Android busque otro reproductor externo.
+     * Se mantiene porque la pantalla de ajustes de Segovia TV
+     * todavía utiliza esta información.
+     */
+    fun players(): List<ResolveInfoWrapper> {
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(
+                Uri.parse("https://example.com/video.mp4"),
+                "video/*"
+            )
+        }
+
+        val pm = activity.packageManager
+
+        return pm.queryIntentActivities(
+            intent,
+            PackageManager.MATCH_DEFAULT_ONLY
+        )
+            .filter {
+                it.activityInfo.packageName != activity.packageName
+            }
+            .map {
+                ResolveInfoWrapper(
+                    it.activityInfo.packageName,
+                    it.activityInfo.name,
+                    it.loadLabel(pm).toString()
+                )
+            }
+    }
+
+    data class ResolveInfoWrapper(
+        val packageName: String,
+        val activityName: String,
+        val label: String
+    )
+
+    fun preferredName(): String? {
+        val prefs = activity.getSharedPreferences(
+            "player_settings",
+            Activity.MODE_PRIVATE
+        )
+
+        return prefs.getString("player_name", null)
+    }
+
+    fun save(packageName: String, name: String) {
+        activity.getSharedPreferences(
+            "player_settings",
+            Activity.MODE_PRIVATE
+        )
+            .edit()
+            .putString("player_package", packageName)
+            .putString("player_name", name)
+            .apply()
+    }
+
+    /**
+     * Convierte las URLs cortas de Segovia TV en URLs del Worker.
+     */
+    private fun normalizeUrl(raw: String): String {
+
+        val value = raw.trim()
+
+        if (value.isEmpty()) {
+            return value
+        }
+
+        if (
+            value.startsWith("http://") ||
+            value.startsWith("https://")
+        ) {
+            return value
+        }
+
+        val clean = value.removePrefix("/")
+
+        return "$WORKER/$clean"
+    }
+
+    /**
+     * Intent explícito hacia el VideoPlayerActivity de VLC
+     * integrado en este proyecto.
+     *
+     * No usamos ACTION_VIEW para resolver reproductores externos.
+     * El ComponentName fuerza la Activity concreta.
      */
     private fun vlcPlayerIntent(
         url: String,
         title: String
-    ): Intent =
-        Intent().apply {
+    ): Intent {
+
+        return Intent().apply {
 
             component = ComponentName(
                 "org.videolan.vlc",
@@ -147,261 +149,252 @@ class ExternalPlayerLauncher(private val activity: Activity) {
                 true
             )
         }
+    }
 
-    // ============================================================
-    // SERIE: ENVÍA HASTA 6 CAPÍTULOS AL VLC INTEGRADO
-    // ============================================================
-    fun playM3U(
-        urls: List<String>,
-        titles: List<String>,
-        posters: List<String>,
+    /**
+     * Reproduce una película o un capítulo.
+     */
+    fun play(
+        rawUrl: String,
+        title: String,
+        contentType: String = "movie",
+        bannerUrl: String? = null,
         seriesTitle: String? = null,
         season: Int? = null,
         episode: Int? = null,
-        bannerUrl: String? = null
-    ) {
-
-        val count = minOf(
-            6,
-            urls.size,
-            titles.size
-        )
-
-        if (count <= 0) {
-            Toast.makeText(
-                activity,
-                "No hay capítulos para reproducir",
-                Toast.LENGTH_LONG
-            ).show()
-
-            return
-        }
-
-        val directUrls = ArrayList<String>()
-        val directTitles = ArrayList<String>()
-        val directPosters = ArrayList<String>()
-
-        for (i in 0 until count) {
-
-            val url = normalizeUrl(urls[i])
-
-            if (url.isBlank()) {
-                continue
-            }
-
-            directUrls.add(url)
-
-            directTitles.add(
-                titles[i].trim()
-            )
-
-            directPosters.add(
-                if (i < posters.size) {
-                    posters[i].trim()
-                } else {
-                    ""
-                }
-            )
-        }
-
-        if (directUrls.isEmpty()) {
-            Toast.makeText(
-                activity,
-                "No hay URLs de capítulos válidas",
-                Toast.LENGTH_LONG
-            ).show()
-
-            return
-        }
-
-        val startIndex = 0
-
-        val firstUrl = directUrls[startIndex]
-        val firstTitle = directTitles[startIndex]
-
-        val intent = vlcPlayerIntent(
-            firstUrl,
-            firstTitle
-        ).apply {
-
-            putExtra(
-                EXTRA_CONTENT_TYPE,
-                "series"
-            )
-
-            putStringArrayListExtra(
-                EXTRA_SEGOVIA_URLS,
-                directUrls
-            )
-
-            putStringArrayListExtra(
-                EXTRA_SEGOVIA_TITLES,
-                directTitles
-            )
-
-            putStringArrayListExtra(
-                EXTRA_SEGOVIA_POSTERS,
-                directPosters
-            )
-
-            putExtra(
-                EXTRA_SEGOVIA_START_INDEX,
-                startIndex
-            )
-
-            if (!seriesTitle.isNullOrBlank()) {
-
-                putExtra(
-                    EXTRA_SERIES_TITLE,
-                    seriesTitle
-                )
-
-                putExtra(
-                    EXTRA_SEGOVIA_SERIES_TITLE,
-                    seriesTitle
-                )
-            }
-
-            if (season != null) {
-
-                putExtra(
-                    EXTRA_SEASON,
-                    season.toString()
-                )
-
-                putExtra(
-                    EXTRA_SEGOVIA_SEASON,
-                    season
-                )
-            }
-
-            if (episode != null) {
-
-                putExtra(
-                    EXTRA_EPISODE,
-                    episode.toString()
-                )
-
-                putExtra(
-                    EXTRA_SEGOVIA_EPISODE,
-                    episode
-                )
-            }
-
-            if (!bannerUrl.isNullOrBlank()) {
-
-                putExtra(
-                    EXTRA_BANNER_URL,
-                    bannerUrl
-                )
-            }
-        }
-
-        try {
-
-            activity.startActivityForResult(
-                intent,
-                REQUEST_RCTV_PROGRESS
-            )
-
-        } catch (e: Exception) {
-
-            Toast.makeText(
-                activity,
-                "No se pudo abrir el reproductor VLC integrado",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    // ============================================================
-    // PELÍCULA INDIVIDUAL
-    // ============================================================
-    fun play(
-        url: String,
-        title: String,
-        bannerUrl: String? = null,
         nextUrl: String? = null,
         nextTitle: String? = null,
         nextSeason: Int? = null,
         nextEpisode: Int? = null
     ) {
 
-        val finalUrl = normalizeUrl(url)
+        val finalUrl = normalizeUrl(rawUrl)
 
-        if (finalUrl.isBlank()) {
+        try {
 
-            Toast.makeText(
-                activity,
-                "No hay URL de reproducción",
-                Toast.LENGTH_LONG
-            ).show()
+            if (finalUrl.isBlank()) {
+                throw IllegalArgumentException(
+                    "La URL de reproducción está vacía"
+                )
+            }
 
-            return
-        }
+            val intent = vlcPlayerIntent(
+                finalUrl,
+                title
+            )
 
-        val intent = vlcPlayerIntent(
-            finalUrl,
-            title
-        ).apply {
-
-            putExtra(
+            intent.putExtra(
                 EXTRA_CONTENT_TYPE,
-                "movie"
+                contentType
             )
 
             if (!bannerUrl.isNullOrBlank()) {
-
-                putExtra(
+                intent.putExtra(
                     EXTRA_BANNER_URL,
                     bannerUrl
                 )
             }
 
-            if (!nextUrl.isNullOrBlank()) {
+            if (!seriesTitle.isNullOrBlank()) {
+                intent.putExtra(
+                    EXTRA_SERIES_TITLE,
+                    seriesTitle
+                )
+            }
 
-                putExtra(
+            if (season != null) {
+                intent.putExtra(
+                    EXTRA_SEASON,
+                    season
+                )
+            }
+
+            if (episode != null) {
+                intent.putExtra(
+                    EXTRA_EPISODE,
+                    episode
+                )
+            }
+
+            if (!nextUrl.isNullOrBlank()) {
+                intent.putExtra(
                     EXTRA_NEXT_URL,
-                    nextUrl
+                    normalizeUrl(nextUrl)
                 )
             }
 
             if (!nextTitle.isNullOrBlank()) {
-
-                putExtra(
+                intent.putExtra(
                     EXTRA_NEXT_TITLE,
                     nextTitle
                 )
             }
 
             if (nextSeason != null) {
-
-                putExtra(
+                intent.putExtra(
                     EXTRA_NEXT_SEASON,
                     nextSeason
                 )
             }
 
             if (nextEpisode != null) {
-
-                putExtra(
+                intent.putExtra(
                     EXTRA_NEXT_EPISODE,
                     nextEpisode
                 )
             }
-        }
-
-        try {
 
             activity.startActivity(intent)
 
         } catch (e: Exception) {
 
-            Toast.makeText(
-                activity,
-                "No se pudo abrir el reproductor VLC integrado",
-                Toast.LENGTH_LONG
-            ).show()
+            showRealError(
+                "Error al abrir VLC integrado",
+                e
+            )
         }
+    }
+
+    /**
+     * Mantiene soporte para listas de hasta 6 capítulos.
+     *
+     * La reproducción normal de Segovia TV actualmente utiliza play(),
+     * pero dejamos esta función porque otros puntos del proyecto pueden
+     * seguir llamándola.
+     */
+    fun playM3U(
+        urls: List<String>,
+        titles: List<String>,
+        posters: List<String> = emptyList(),
+        startIndex: Int = 0,
+        seriesTitle: String? = null,
+        season: Int? = null,
+        episode: Int? = null
+    ) {
+
+        try {
+
+            val count = minOf(
+                6,
+                urls.size,
+                titles.size
+            )
+
+            if (count <= 0) {
+                throw IllegalArgumentException(
+                    "La lista de reproducción está vacía"
+                )
+            }
+
+            val safeStartIndex = startIndex.coerceIn(
+                0,
+                count - 1
+            )
+
+            val intent = vlcPlayerIntent(
+                normalizeUrl(urls[safeStartIndex]),
+                titles[safeStartIndex]
+            )
+
+            intent.putExtra(
+                EXTRA_CONTENT_TYPE,
+                "series"
+            )
+
+            intent.putExtra(
+                EXTRA_SEGOVIA_URLS,
+                ArrayList(
+                    urls
+                        .take(count)
+                        .map { normalizeUrl(it) }
+                )
+            )
+
+            intent.putExtra(
+                EXTRA_SEGOVIA_TITLES,
+                ArrayList(
+                    titles.take(count)
+                )
+            )
+
+            if (posters.isNotEmpty()) {
+                intent.putExtra(
+                    EXTRA_SEGOVIA_POSTERS,
+                    ArrayList(
+                        posters.take(count)
+                    )
+                )
+            }
+
+            intent.putExtra(
+                EXTRA_SEGOVIA_START_INDEX,
+                safeStartIndex
+            )
+
+            if (!seriesTitle.isNullOrBlank()) {
+                intent.putExtra(
+                    EXTRA_SERIES_TITLE,
+                    seriesTitle
+                )
+            }
+
+            if (season != null) {
+                intent.putExtra(
+                    EXTRA_SEASON,
+                    season
+                )
+            }
+
+            if (episode != null) {
+                intent.putExtra(
+                    EXTRA_EPISODE,
+                    episode
+                )
+            }
+
+            activity.startActivity(intent)
+
+        } catch (e: Exception) {
+
+            showRealError(
+                "Error al abrir VLC integrado",
+                e
+            )
+        }
+    }
+
+    /**
+     * Muestra el error REAL que Android/VLC está devolviendo.
+     *
+     * Esto reemplaza temporalmente el mensaje genérico:
+     * "No se pudo abrir el reproductor VLC integrado".
+     */
+    private fun showRealError(
+        prefix: String,
+        e: Exception
+    ) {
+
+        val exceptionName =
+            e.javaClass.simpleName
+
+        val message =
+            e.message ?: "sin mensaje"
+
+        val fullMessage =
+            "$prefix\n\n" +
+            "Excepción: $exceptionName\n" +
+            "Mensaje: $message"
+
+        android.util.Log.e(
+            "SegoviaVLC",
+            fullMessage,
+            e
+        )
+
+        Toast.makeText(
+            activity,
+            fullMessage,
+            Toast.LENGTH_LONG
+        ).show()
     }
 }
