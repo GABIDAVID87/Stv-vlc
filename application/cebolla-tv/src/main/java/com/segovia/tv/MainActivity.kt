@@ -1,8 +1,8 @@
 package com.segovia.tv
+
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Rect
-import android.os.Build
 import android.os.Bundle
 import android.support.v4.media.MediaBrowserCompat
 import android.support.v4.media.MediaMetadataCompat
@@ -32,34 +32,84 @@ import com.segovia.tv.series.SeriesScreen
 import com.segovia.tv.ui.NavigationUi
 import org.json.JSONArray
 import org.json.JSONObject
+import org.videolan.vlc.PlaybackService
 
 class MainActivity : AppCompatActivity() {
-    private val rctvPackages = arrayOf("com.bls.vlc.simple.debug", "com.bls.vlc.simple")
-    private val rctvServiceName = "org.videolan.vlc.PlaybackService"
-    private var rctvBrowser: MediaBrowserCompat? = null
-    private var rctvController: MediaControllerCompat? = null
-    private var rctvConnected = false
-    private val rctvHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private var rctvPolling = false
-    private val rctvConnectionCallback = object : MediaBrowserCompat.ConnectionCallback() {
+
+    companion object {
+        private const val TAG_VLC = "SegoviaVLCProgress"
+        private const val VLC_PROGRESS_INTERVAL = 2000L
+        private const val WORKER = "https://segovia-tv-proxy.guadianesgalaxi.workers.dev"
+    }
+
+    // ============================================================
+    // VLC INTEGRADO
+    // ============================================================
+
+    private var vlcBrowser: MediaBrowserCompat? = null
+    private var vlcController: MediaControllerCompat? = null
+    private var vlcConnected = false
+    private val vlcHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var vlcPolling = false
+    private var ultimaUrlVlc = ""
+    private var ultimoGuardadoUrl = ""
+    private var ultimoGuardadoMs = 0L
+    private var ultimaPersistencia = 0L
+
+    private val vlcConnectionCallback = object : MediaBrowserCompat.ConnectionCallback() {
         override fun onConnected() {
-            val browser = rctvBrowser ?: return
+            val browser = vlcBrowser ?: return
             try {
-                rctvController = MediaControllerCompat(this@MainActivity, browser.sessionToken)
-                rctvController?.registerCallback(rctvControllerCallback)
-                rctvConnected = true
-                Log.d("SegoviaRCTV", "MediaBrowser conectado a RCTV")
-                iniciarPollingRctv()
-            } catch (e: Exception) { Log.e("SegoviaRCTV", "No se pudo crear MediaController: ${e.message}", e) }
+                vlcController = MediaControllerCompat(this@MainActivity, browser.sessionToken)
+                vlcController?.registerCallback(vlcControllerCallback)
+                vlcConnected = true
+                Log.d(TAG_VLC, "VLC integrado conectado correctamente")
+                iniciarPollingVlc()
+            } catch (e: Exception) {
+                Log.e(TAG_VLC, "Error creando MediaController VLC", e)
+            }
         }
-        override fun onConnectionSuspended() { rctvConnected = false; Log.d("SegoviaRCTV", "MediaBrowser suspendido") }
-        override fun onConnectionFailed() { rctvConnected = false; Log.d("SegoviaRCTV", "MediaBrowser no pudo conectar") }
+
+        override fun onConnectionSuspended() {
+            vlcConnected = false
+            Log.d(TAG_VLC, "Conexión VLC suspendida")
+        }
+
+        override fun onConnectionFailed() {
+            vlcConnected = false
+            Log.d(TAG_VLC, "No se pudo conectar con PlaybackService VLC")
+        }
     }
-    private val rctvControllerCallback = object : MediaControllerCompat.Callback() {
-        override fun onPlaybackStateChanged(state: PlaybackStateCompat?) { actualizarProgresoDesdeRctv() }
-        override fun onMetadataChanged(metadata: MediaMetadataCompat?) { actualizarProgresoDesdeRctv() }
-        override fun onQueueChanged(queue: MutableList<MediaSessionCompat.QueueItem>?) { actualizarProgresoDesdeRctv() }
+
+    private val vlcControllerCallback = object : MediaControllerCompat.Callback() {
+        override fun onPlaybackStateChanged(state: PlaybackStateCompat?) {
+            capturarProgresoVlc(false)
+        }
+
+        override fun onMetadataChanged(metadata: MediaMetadataCompat?) {
+            capturarProgresoVlc(true)
+        }
+
+        override fun onQueueChanged(queue: MutableList<MediaSessionCompat.QueueItem>?) {
+            capturarProgresoVlc(true)
+        }
     }
+
+    private val vlcPollRunnable = object : Runnable {
+        override fun run() {
+            if (!vlcConnected) {
+                vlcPolling = false
+                return
+            }
+            capturarProgresoVlc(false)
+            vlcHandler.postDelayed(this, VLC_PROGRESS_INTERVAL)
+        }
+    }
+
+    // ============================================================
+    // UI / DATOS
+    // ============================================================
+
     private var currentScreen = "Inicio"
     private var previousScreen = "Inicio"
     private var peliculaSeleccionada: PeliculaDrive? = null
@@ -77,92 +127,356 @@ class MainActivity : AppCompatActivity() {
     private val seguir = mutableListOf<SeguirViendoItem>()
     private var touchTarget: View? = null
 
-    override fun onDestroy() {
-        super.onDestroy()
-        detenerMediaSessionRctv()
-    }
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != ExternalPlayerLauncher.REQUEST_RCTV_PROGRESS) return
-        val json = data?.getStringExtra(ExternalPlayerLauncher.EXTRA_SEGOVIA_PROGRESS_JSON).orEmpty()
-        if (json.isBlank()) return
-        recibirProgresoRctv(json)
-    }
-    private fun recibirProgresoRctv(json: String) {
-        try {
-            val a = JSONArray(json)
-            for (i in 0 until a.length()) {
-                val o = a.optJSONObject(i) ?: continue
-                val uri = o.optString("uri").trim()
-                val seriesTitle = o.optString("series_title").trim()
-                val season = o.optInt("season", -1)
-                val episode = o.optInt("episode", -1)
-                val title = o.optString("title").trim()
-                val poster = o.optString("poster_url").trim()
-                val banner = o.optString("banner_url").trim()
-                val positionMs = o.optLong("position_ms", -1L)
-                if (positionMs < 0L) continue
-                var index = -1
-                if (uri.isNotBlank()) index = seguir.indexOfFirst { it.tipo == "serie" && it.streamUrl.trim() == uri }
-                if (index == -1 && seriesTitle.isNotBlank() && season > 0 && episode > 0) index = seguir.indexOfFirst { it.tipo == "serie" && it.titulo.equals(seriesTitle, ignoreCase = true) && it.temporada == season && it.capitulo == episode }
-                if (index == -1 && seriesTitle.isNotBlank() && episode > 0) index = seguir.indexOfFirst { it.tipo == "serie" && it.titulo.equals(seriesTitle, ignoreCase = true) && it.capitulo == episode }
-                if (index >= 0) {
-                    val viejo = seguir[index]
-                    seguir[index] = viejo.copy(titulo = if (seriesTitle.isNotBlank()) seriesTitle else viejo.titulo, streamUrl = if (uri.isNotBlank()) uri else viejo.streamUrl, temporada = if (season > 0) season else viejo.temporada, capitulo = if (episode > 0) episode else viejo.capitulo, progreso = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), posterUrl = if (poster.isNotBlank()) poster else viejo.posterUrl, bannerUrl = if (banner.isNotBlank()) banner else viejo.bannerUrl, subtitulo = if (episode > 0) "${viejo.subtitulo.substringBefore("•").trim()} • Capítulo $episode" else viejo.subtitulo)
-                } else if (seriesTitle.isNotBlank() && uri.isNotBlank()) {
-                    seguir.add(0, SeguirViendoItem(tipo = "serie", titulo = seriesTitle, subtitulo = if (episode > 0) "Temporada $season • Capítulo $episode" else "", posterUrl = poster, bannerUrl = banner, sinopsis = "", streamUrl = uri, temporada = if (season > 0) season else 0, capitulo = if (episode > 0) episode else 0, progreso = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()))
+    // ============================================================
+    // CICLO DE VIDA
+    // ============================================================
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        iniciarVlcIntegrado()
+        player = ExternalPlayerLauncher(this)
+        cargarSeguir()
+
+        repo = ContentRepository(this) {
+            runOnUiThread {
+                when (currentScreen) {
+                    "Inicio" -> showHome()
+                    "Peliculas" -> showMovies()
+                    "Series" -> showSeries()
+                    "Kids" -> showKids()
                 }
             }
-            while (seguir.size > 12) seguir.removeAt(seguir.lastIndex)
-            guardarLista()
-            runOnUiThread { refrescarPantallaActual() }
-        } catch (_: Exception) {}
+        }
+
+        nav = NavigationUi(this, { route -> navigate(route) }, { finishAffinity() })
+
+        grid = GridScreen(
+            this,
+            nav,
+            { null },
+            repo::displayName,
+            { openMovie(it) },
+            { openSeries(it) }
+        )
+
+        home = HomeScreen(
+            this,
+            nav,
+            { null },
+            repo::displayName,
+            { seguir.toList() },
+            { openContinue(it) }
+        )
+
+        peliculas = PeliculasScreen(this, nav, grid)
+        kids = KidsScreen(this, nav, grid)
+
+        series = SeriesScreen(
+            this,
+            nav,
+            { null },
+            repo::displayName,
+            player,
+            { seguir.toList() }
+        ) { s, t, n, c ->
+            guardarCapitulo(s, t, n, c)
+        }
+
+        movieDetails = MovieDetailsScreen(
+            this,
+            nav,
+            { null },
+            repo::displayName,
+            player
+        ) {
+            guardarPelicula(it)
+        }
+
+        settings = PlayerSettingsScreen(this, nav, player) {
+            showPrevious()
+        }
+
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    goBack()
+                }
+            }
+        )
+
+        repo.loadCache()
+        showHome()
+        repo.refreshAsync()
     }
-    private fun iniciarMediaSessionRctv() {
-        if (rctvBrowser != null) return
-        for (pkg in rctvPackages) {
-            try {
-                val browser = MediaBrowserCompat(this, ComponentName(pkg, rctvServiceName), rctvConnectionCallback, null)
-                rctvBrowser = browser
-                browser.connect()
-                Log.d("SegoviaRCTV", "Intentando conectar con $pkg")
-                return
-            } catch (e: Exception) { Log.w("SegoviaRCTV", "No se pudo iniciar conexión con $pkg: ${e.message}") }
+
+    override fun onResume() {
+        super.onResume()
+        capturarProgresoVlc(true)
+        refrescarPantallaActual()
+    }
+
+    override fun onDestroy() {
+        capturarProgresoVlc(true)
+        detenerVlcIntegrado()
+        super.onDestroy()
+    }
+
+    // ============================================================
+    // VLC INTEGRADO
+    // ============================================================
+
+    private fun iniciarVlcIntegrado() {
+        if (vlcBrowser != null) return
+
+        try {
+            val component = ComponentName(this, PlaybackService::class.java)
+            val browser = MediaBrowserCompat(this, component, vlcConnectionCallback, null)
+            vlcBrowser = browser
+            browser.connect()
+            Log.d(TAG_VLC, "Intentando conectar con PlaybackService integrado")
+        } catch (e: Exception) {
+            Log.e(TAG_VLC, "ERROR conectando con PlaybackService integrado", e)
         }
     }
-    private fun iniciarPollingRctv() {
-        if (rctvPolling) return
-        rctvPolling = true
-        rctvHandler.post(rctvPollRunnable)
+
+    private fun iniciarPollingVlc() {
+        if (vlcPolling) return
+        vlcPolling = true
+        vlcHandler.post(vlcPollRunnable)
     }
-    private val rctvPollRunnable = object : Runnable {
-        override fun run() {
-            if (!rctvConnected) { rctvPolling = false; return }
-            actualizarProgresoDesdeRctv()
-            rctvHandler.postDelayed(this, 2000L)
+
+    private fun detenerVlcIntegrado() {
+        vlcPolling = false
+        vlcHandler.removeCallbacks(vlcPollRunnable)
+
+        try {
+            vlcController?.unregisterCallback(vlcControllerCallback)
+        } catch (_: Exception) {
         }
+
+        vlcController = null
+
+        try {
+            vlcBrowser?.disconnect()
+        } catch (_: Exception) {
+        }
+
+        vlcBrowser = null
+        vlcConnected = false
     }
-    private fun actualizarProgresoDesdeRctv() {
-        val controller = rctvController ?: return
+
+    // ============================================================
+    // CAPTURA DE PROGRESO
+    // ============================================================
+
+    private fun capturarProgresoVlc(forzar: Boolean) {
+        val controller = vlcController ?: return
         val state = controller.playbackState ?: return
         val metadata = controller.metadata
-        val queue = controller.queue ?: return
+        val queue = controller.queue
+
+        var uri = ""
         val activeId = state.activeQueueItemId
-        if (activeId < 0) return
-        val item = queue.firstOrNull { it.queueId == activeId } ?: return
-        val uri = item.description?.mediaUri?.toString()?.trim().orEmpty()
-        if (uri.isBlank()) return
-        val position = state.position.coerceAtLeast(0L)
-        val duration = metadata?.getLong(MediaMetadataCompat.METADATA_KEY_DURATION) ?: 0L
-        Log.d("SegoviaRCTV", "Capítulo activo: ${item.description?.title} posición=$position duración=$duration uri=$uri")
-        val index = seguir.indexOfFirst { it.streamUrl.trim() == uri }
-        if (index >= 0 && position > 0L) {
-            val viejo = seguir[index]
-            seguir[index] = viejo.copy(progreso = position.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
-            guardarLista()
-            refrescarPantallaActual()
+
+        if (queue != null && activeId >= 0) {
+            val item = queue.firstOrNull { it.queueId == activeId }
+            if (item != null) {
+                uri = item.description?.mediaUri?.toString()?.trim().orEmpty()
+            }
         }
+
+        if (uri.isBlank()) {
+            uri = metadata?.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_URI)?.trim().orEmpty()
+        }
+
+        if (uri.isBlank()) return
+
+        val position = state.position.coerceAtLeast(0L)
+        val duration = metadata?.getLong(MediaMetadataCompat.METADATA_KEY_DURATION)?.coerceAtLeast(0L) ?: 0L
+
+        if (position <= 0L && duration <= 0L) return
+
+        val urlNormalizada = normalizeProgressUrl(uri)
+        val ahora = System.currentTimeMillis()
+        val cambioDeMedia = urlNormalizada != ultimaUrlVlc
+
+        if (!forzar && !cambioDeMedia && ahora - ultimaPersistencia < 5000L) return
+
+        ultimaUrlVlc = urlNormalizada
+
+        Log.d(
+            TAG_VLC,
+            "VLC actual: uri=$urlNormalizada position=$position duration=$duration"
+        )
+
+        guardarProgresoCapitulo(uri, position, duration, forzar)
     }
+
+    private fun normalizeProgressUrl(raw: String): String {
+        val url = raw.trim()
+        if (url.isBlank()) return ""
+
+        if (url.startsWith("/video?")) return WORKER + url
+        if (url.startsWith("video?")) return "$WORKER/$url"
+
+        if (url.startsWith("undefined/video?", ignoreCase = true)) {
+            return WORKER + "/" + url.substringAfter("undefined/")
+        }
+
+        if (url.startsWith("null/video?", ignoreCase = true)) {
+            return WORKER + "/" + url.substringAfter("null/")
+        }
+
+        if (!url.startsWith("http://") && !url.startsWith("https://") && !url.contains("/")) {
+            return "$WORKER/video?id=$url"
+        }
+
+        return url
+    }
+
+    // ============================================================
+    // BÚSQUEDA DEL CAPÍTULO
+    // ============================================================
+
+    private data class CapituloEncontrado(
+        val serie: SerieDrive,
+        val temporada: Temporada,
+        val numero: Int,
+        val capitulo: Capitulo
+    )
+
+    private fun buscarCapituloPorUrl(uri: String): CapituloEncontrado? {
+        val objetivo = normalizeProgressUrl(uri)
+        if (objetivo.isBlank()) return null
+
+        for (serie in repo.series) {
+            for (temporada in serie.temporadas) {
+                for ((index, capitulo) in temporada.capitulos.withIndex()) {
+                    val capUrl = normalizeProgressUrl(capitulo.streamUrl)
+
+                    if (capUrl.isNotBlank() && capUrl == objetivo) {
+                        return CapituloEncontrado(
+                            serie,
+                            temporada,
+                            index + 1,
+                            capitulo
+                        )
+                    }
+                }
+            }
+        }
+
+        return null
+    }
+
+    // ============================================================
+    // GUARDAR PROGRESO
+    // ============================================================
+
+    private fun guardarProgresoCapitulo(
+        uri: String,
+        positionMs: Long,
+        durationMs: Long,
+        forzar: Boolean
+    ) {
+        val encontrado = buscarCapituloPorUrl(uri)
+
+        if (encontrado == null) {
+            Log.d(TAG_VLC, "No se encontró capítulo para URI: $uri")
+            return
+        }
+
+        val serie = encontrado.serie
+        val temporada = encontrado.temporada
+        val numero = encontrado.numero
+        val capitulo = encontrado.capitulo
+
+        val progresoFinal = if (
+            durationMs > 0L &&
+            positionMs >= durationMs - 3000L
+        ) {
+            durationMs
+        } else {
+            positionMs
+        }
+
+        val progresoInt = progresoFinal
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+
+        val urlCatalogo = capitulo.streamUrl
+
+        var index = seguir.indexOfFirst {
+            it.tipo == "serie" &&
+                normalizeProgressUrl(it.streamUrl) ==
+                normalizeProgressUrl(urlCatalogo)
+        }
+
+        if (index == -1) {
+            index = seguir.indexOfFirst {
+                it.tipo == "serie" &&
+                    it.titulo.equals(serie.titulo, ignoreCase = true) &&
+                    it.temporada == temporada.numero &&
+                    it.capitulo == numero
+            }
+        }
+
+        val subtitulo = if (numero > 0) {
+            "${temporada.titulo} • Capítulo $numero"
+        } else {
+            temporada.titulo
+        }
+
+        if (index >= 0) {
+            val viejo = seguir[index]
+
+            seguir[index] = viejo.copy(
+                tipo = "serie",
+                titulo = serie.titulo,
+                subtitulo = subtitulo,
+                posterUrl = if (serie.posterUrl.isNotBlank()) serie.posterUrl else viejo.posterUrl,
+                bannerUrl = if (serie.bannerUrl.isNotBlank()) serie.bannerUrl else viejo.bannerUrl,
+                sinopsis = if (capitulo.sinopsis.isNotBlank()) capitulo.sinopsis else viejo.sinopsis,
+                streamUrl = urlCatalogo,
+                temporada = temporada.numero,
+                capitulo = numero,
+                progreso = progresoInt
+            )
+        } else {
+            seguir.add(
+                0,
+                SeguirViendoItem(
+                    tipo = "serie",
+                    titulo = serie.titulo,
+                    subtitulo = subtitulo,
+                    posterUrl = serie.posterUrl,
+                    bannerUrl = serie.bannerUrl,
+                    sinopsis = capitulo.sinopsis,
+                    streamUrl = urlCatalogo,
+                    temporada = temporada.numero,
+                    capitulo = numero,
+                    progreso = progresoInt
+                )
+            )
+        }
+
+        while (seguir.size > 12) {
+            seguir.removeAt(seguir.lastIndex)
+        }
+
+        ultimoGuardadoUrl = normalizeProgressUrl(urlCatalogo)
+        ultimoGuardadoMs = progresoFinal
+        ultimaPersistencia = System.currentTimeMillis()
+
+        guardarLista()
+
+        Log.d(
+            TAG_VLC,
+            "PROGRESO GUARDADO: ${serie.titulo} T${temporada.numero} C$numero $progresoFinal ms"
+        )
+    }
+
     private fun refrescarPantallaActual() {
         runOnUiThread {
             when (currentScreen) {
@@ -173,147 +487,363 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    private fun detenerMediaSessionRctv() {
-        rctvPolling = false
-        rctvHandler.removeCallbacks(rctvPollRunnable)
-        try { rctvController?.unregisterCallback(rctvControllerCallback) } catch (_: Exception) {}
-        rctvController = null
-        try { rctvBrowser?.disconnect() } catch (_: Exception) {}
-        rctvBrowser = null
-        rctvConnected = false
-    }
-       override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        iniciarMediaSessionRctv()
-        player = ExternalPlayerLauncher(this)
-        cargarSeguir()
-        repo = ContentRepository(this) {
-            runOnUiThread {
-                when (currentScreen) { "Inicio" -> showHome(); "Peliculas" -> showMovies(); "Series" -> showSeries(); "Kids" -> showKids() }
-            }
-        }
-        nav = NavigationUi(this, { route -> navigate(route) }, { finishAffinity() })
-        grid = GridScreen(this, nav, { null }, repo::displayName, { openMovie(it) }, { openSeries(it) })
-        home = HomeScreen(this, nav, { null }, repo::displayName, { repo.peliculas }, { seguir.toList() }, { openContinue(it) })
-        peliculas = PeliculasScreen(this, nav, grid)
-        kids = KidsScreen(this, nav, grid)
-        series = SeriesScreen(this, nav, { null }, repo::displayName, player, { seguir.toList() }) { s, t, n, c -> guardarCapitulo(s, t, n, c) }
-        movieDetails = MovieDetailsScreen(this, nav, { null }, repo::displayName, player) { guardarPelicula(it) }
-        settings = PlayerSettingsScreen(this, nav, player) { showPrevious() }
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() { goBack() }
-        })
-        repo.loadCache()
-        showHome()
-        repo.refreshAsync()
-    }
+
+    // ============================================================
+    // NAVEGACIÓN
+    // ============================================================
+
     fun navigate(route: String) {
-        when (route) { "Inicio" -> showHome(); "Peliculas" -> showMovies(); "Series" -> showSeries(); "Kids" -> showKids(); "Ajustes" -> showSettings() }
+        when (route) {
+            "Inicio" -> showHome()
+            "Peliculas" -> showMovies()
+            "Series" -> showSeries()
+            "Kids" -> showKids()
+            "Ajustes" -> showSettings()
+        }
     }
+
     private fun showLoading() {
-        setContentView(android.widget.FrameLayout(this).apply {
-            setBackgroundColor(android.graphics.Color.parseColor("#080C14"))
-            addView(android.widget.ProgressBar(this@MainActivity), android.widget.FrameLayout.LayoutParams(-2, -2).apply { gravity = android.view.Gravity.CENTER })
-        })
+        setContentView(
+            android.widget.FrameLayout(this).apply {
+                setBackgroundColor(android.graphics.Color.parseColor("#080C14"))
+                addView(
+                    android.widget.ProgressBar(this@MainActivity),
+                    android.widget.FrameLayout.LayoutParams(-2, -2).apply {
+                        gravity = android.view.Gravity.CENTER
+                    }
+                )
+            }
+        )
     }
-    private fun showHome() { previousScreen = currentScreen; currentScreen = "Inicio"; peliculaSeleccionada = null; serieSeleccionada = null; home.show() }
-    private fun showMovies() { previousScreen = currentScreen; currentScreen = "Peliculas"; peliculas.show(repo.peliculas) }
-    private fun showKids() { previousScreen = currentScreen; currentScreen = "Kids"; kids.show(repo.kidsItems) }
-    private fun showSeries() { previousScreen = currentScreen; currentScreen = "Series"; series.showGrid(repo.series) { openSeries(it) } }
-    private fun openMovie(p: PeliculaDrive) { previousScreen = currentScreen; currentScreen = "DetallesPeli"; peliculaSeleccionada = p; serieSeleccionada = null; movieDetails.show(p) }
-    private fun openSeries(s: SerieDrive) { previousScreen = currentScreen; currentScreen = "DetallesSerie"; serieSeleccionada = s; peliculaSeleccionada = null; series.showDetail(s) }
-    private fun showSettings() { previousScreen = currentScreen; currentScreen = "Ajustes"; settings.show() }
+
+    private fun showHome() {
+        previousScreen = currentScreen
+        currentScreen = "Inicio"
+        peliculaSeleccionada = null
+        serieSeleccionada = null
+        home.show()
+    }
+
+    private fun showMovies() {
+        previousScreen = currentScreen
+        currentScreen = "Peliculas"
+        peliculas.show(repo.peliculas)
+    }
+
+    private fun showKids() {
+        previousScreen = currentScreen
+        currentScreen = "Kids"
+        kids.show(repo.kidsItems)
+    }
+
+    private fun showSeries() {
+        previousScreen = currentScreen
+        currentScreen = "Series"
+        series.showGrid(repo.series) { openSeries(it) }
+    }
+
+    private fun openMovie(p: PeliculaDrive) {
+        previousScreen = currentScreen
+        currentScreen = "DetallesPeli"
+        peliculaSeleccionada = p
+        serieSeleccionada = null
+        movieDetails.show(p)
+    }
+
+    private fun openSeries(s: SerieDrive) {
+        previousScreen = currentScreen
+        currentScreen = "DetallesSerie"
+        serieSeleccionada = s
+        peliculaSeleccionada = null
+        series.showDetail(s)
+    }
+
+    private fun showSettings() {
+        previousScreen = currentScreen
+        currentScreen = "Ajustes"
+        settings.show()
+    }
+
     private fun showPrevious() {
         when (previousScreen) {
-            "Peliculas" -> showMovies(); "Series" -> showSeries(); "Kids" -> showKids()
+            "Peliculas" -> showMovies()
+            "Series" -> showSeries()
+            "Kids" -> showKids()
             "DetallesPeli" -> peliculaSeleccionada?.let { movieDetails.show(it) } ?: showHome()
             "DetallesSerie" -> serieSeleccionada?.let { series.showDetail(it) } ?: showHome()
             else -> showHome()
         }
     }
+
     private fun goBack() {
         when (currentScreen) {
-            "DetallesPeli" -> if (previousScreen == "Kids") showKids() else if (previousScreen == "Peliculas") showMovies() else showHome()
-            "DetallesSerie" -> if (previousScreen == "Series") showSeries() else showHome()
+            "DetallesPeli" -> {
+                if (previousScreen == "Kids") showKids()
+                else if (previousScreen == "Peliculas") showMovies()
+                else showHome()
+            }
+
+            "DetallesSerie" -> {
+                if (previousScreen == "Series") showSeries()
+                else showHome()
+            }
+
             "Peliculas", "Series", "Kids", "Ajustes" -> showHome()
             "Inicio" -> finish()
             else -> showHome()
         }
     }
-        private fun cargarSeguir() {
+
+    // ============================================================
+    // SEGUIR VIENDO
+    // ============================================================
+
+    private fun cargarSeguir() {
         try {
-            val json = getSharedPreferences("seguir_viendo", MODE_PRIVATE).getString("items", "[]") ?: "[]"
+            val json = getSharedPreferences("seguir_viendo", MODE_PRIVATE)
+                .getString("items", "[]") ?: "[]"
+
             val a = JSONArray(json)
             seguir.clear()
+
             for (i in 0 until a.length()) {
                 val o = a.getJSONObject(i)
-                seguir.add(SeguirViendoItem(o.optString("tipo"), o.optString("titulo"), o.optString("subtitulo"), o.optString("posterUrl"), o.optString("bannerUrl"), o.optString("sinopsis"), o.optString("streamUrl"), o.optInt("temporada"), o.optInt("capitulo"), o.optInt("progreso")))
+
+                seguir.add(
+                    SeguirViendoItem(
+                        o.optString("tipo"),
+                        o.optString("titulo"),
+                        o.optString("subtitulo"),
+                        o.optString("posterUrl"),
+                        o.optString("bannerUrl"),
+                        o.optString("sinopsis"),
+                        o.optString("streamUrl"),
+                        o.optInt("temporada"),
+                        o.optInt("capitulo"),
+                        o.optInt("progreso")
+                    )
+                )
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
+
     private fun guardarLista() {
         val a = JSONArray()
+
         seguir.forEach {
-            a.put(JSONObject().apply { put("tipo", it.tipo); put("titulo", it.titulo); put("subtitulo", it.subtitulo); put("posterUrl", it.posterUrl); put("bannerUrl", it.bannerUrl); put("sinopsis", it.sinopsis); put("streamUrl", it.streamUrl); put("temporada", it.temporada); put("capitulo", it.capitulo); put("progreso", it.progreso) })
+            a.put(
+                JSONObject().apply {
+                    put("tipo", it.tipo)
+                    put("titulo", it.titulo)
+                    put("subtitulo", it.subtitulo)
+                    put("posterUrl", it.posterUrl)
+                    put("bannerUrl", it.bannerUrl)
+                    put("sinopsis", it.sinopsis)
+                    put("streamUrl", it.streamUrl)
+                    put("temporada", it.temporada)
+                    put("capitulo", it.capitulo)
+                    put("progreso", it.progreso)
+                }
+            )
         }
-        getSharedPreferences("seguir_viendo", MODE_PRIVATE).edit().putString("items", a.toString()).apply()
+
+        getSharedPreferences("seguir_viendo", MODE_PRIVATE)
+            .edit()
+            .putString("items", a.toString())
+            .apply()
     }
+
     private fun guardarPelicula(p: PeliculaDrive) {
-        val item = SeguirViendoItem(tipo = "pelicula", titulo = p.titulo, posterUrl = p.posterUrl, bannerUrl = p.bannerUrl, sinopsis = p.sinopsis, streamUrl = p.streamUrl, progreso = p.progreso)
+        val item = SeguirViendoItem(
+            tipo = "pelicula",
+            titulo = p.titulo,
+            posterUrl = p.posterUrl,
+            bannerUrl = p.bannerUrl,
+            sinopsis = p.sinopsis,
+            streamUrl = p.streamUrl,
+            progreso = p.progreso
+        )
+
         seguir.removeAll { it.streamUrl == p.streamUrl }
         seguir.add(0, item)
-        while (seguir.size > 12) seguir.removeAt(seguir.lastIndex)
+
+        while (seguir.size > 12) {
+            seguir.removeAt(seguir.lastIndex)
+        }
+
         guardarLista()
     }
-    private fun guardarCapitulo(s: SerieDrive, t: Temporada, n: Int, c: Capitulo) {
-        val item = SeguirViendoItem(tipo = "serie", titulo = s.titulo, subtitulo = "${t.titulo} • Capítulo $n", posterUrl = s.posterUrl, bannerUrl = s.bannerUrl, sinopsis = c.sinopsis, streamUrl = c.streamUrl, temporada = t.numero, capitulo = n, progreso = seguir.firstOrNull { it.tipo == "serie" && (it.streamUrl == c.streamUrl || (it.titulo.equals(s.titulo, ignoreCase = true) && it.temporada == t.numero && it.capitulo == n)) }?.progreso ?: 0)
-        seguir.removeAll { it.streamUrl == c.streamUrl || (it.tipo == "serie" && it.titulo.equals(s.titulo, ignoreCase = true) && it.temporada == t.numero && it.capitulo == n) }
+
+    private fun guardarCapitulo(
+        s: SerieDrive,
+        t: Temporada,
+        n: Int,
+        c: Capitulo
+    ) {
+        val progresoAnterior = seguir.firstOrNull {
+            it.tipo == "serie" &&
+                (
+                    normalizeProgressUrl(it.streamUrl) ==
+                    normalizeProgressUrl(c.streamUrl) ||
+                    (
+                        it.titulo.equals(s.titulo, ignoreCase = true) &&
+                            it.temporada == t.numero &&
+                            it.capitulo == n
+                    )
+                )
+        }?.progreso ?: 0
+
+        val item = SeguirViendoItem(
+            tipo = "serie",
+            titulo = s.titulo,
+            subtitulo = "${t.titulo} • Capítulo $n",
+            posterUrl = s.posterUrl,
+            bannerUrl = s.bannerUrl,
+            sinopsis = c.sinopsis,
+            streamUrl = c.streamUrl,
+            temporada = t.numero,
+            capitulo = n,
+            progreso = progresoAnterior
+        )
+
+        seguir.removeAll {
+            it.streamUrl == c.streamUrl ||
+                (
+                    it.tipo == "serie" &&
+                        it.titulo.equals(s.titulo, ignoreCase = true) &&
+                        it.temporada == t.numero &&
+                        it.capitulo == n
+                )
+        }
+
         seguir.add(0, item)
-        while (seguir.size > 12) seguir.removeAt(seguir.lastIndex)
+
+        while (seguir.size > 12) {
+            seguir.removeAt(seguir.lastIndex)
+        }
+
         guardarLista()
     }
+
+    // ============================================================
+    // CONTINUAR VIENDO
+    // ============================================================
+
     private fun openContinue(item: SeguirViendoItem) {
         if (item.tipo == "serie") {
-            val s = repo.series.firstOrNull { it.titulo == item.titulo } ?: repo.kidsItems.filterIsInstance<com.segovia.tv.model.KidsItem.Series>().map { it.data }.firstOrNull { it.titulo == item.titulo }
-            if (s != null) { serieSeleccionada = s; previousScreen = "Inicio"; currentScreen = "DetallesSerie"; series.showDetail(s); return }
+            val s = repo.series.firstOrNull {
+                it.titulo == item.titulo
+            } ?: repo.kidsItems
+                .filterIsInstance<com.segovia.tv.model.KidsItem.Series>()
+                .map { it.data }
+                .firstOrNull {
+                    it.titulo == item.titulo
+                }
+
+            if (s != null) {
+                serieSeleccionada = s
+                previousScreen = "Inicio"
+                currentScreen = "DetallesSerie"
+                series.showDetail(s)
+                return
+            }
         }
-        val p = repo.peliculas.firstOrNull { it.streamUrl == item.streamUrl } ?: repo.kidsItems.filterIsInstance<com.segovia.tv.model.KidsItem.Movie>().map { it.data }.firstOrNull { it.streamUrl == item.streamUrl }
-        if (p != null) { previousScreen = "Inicio"; currentScreen = "DetallesPeli"; peliculaSeleccionada = p; movieDetails.show(p); return }
+
+        val p = repo.peliculas.firstOrNull {
+            it.streamUrl == item.streamUrl
+        } ?: repo.kidsItems
+            .filterIsInstance<com.segovia.tv.model.KidsItem.Movie>()
+            .map { it.data }
+            .firstOrNull {
+                it.streamUrl == item.streamUrl
+            }
+
+        if (p != null) {
+            previousScreen = "Inicio"
+            currentScreen = "DetallesPeli"
+            peliculaSeleccionada = p
+            movieDetails.show(p)
+            return
+        }
+
         player.play(item.streamUrl, item.titulo)
     }
+
+    // ============================================================
+    // TOUCH / TV
+    // ============================================================
+
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 touchTarget = null
+
                 val root = window.decorView as? ViewGroup
                 val titles = arrayOf("INICIO", "PELICULAS", "SERIES", "KIDS", "AJUSTES", "SALIR")
+
                 if (root != null) {
                     for (t in titles) {
                         val v = findTabByTitle(root, t) ?: continue
                         val r = Rect()
-                        if (v.getGlobalVisibleRect(r) && event.rawX >= r.left && event.rawX < r.right && event.rawY >= r.top && event.rawY < r.bottom && v.isShown && v.isEnabled) { touchTarget = v; return true }
+
+                        if (
+                            v.getGlobalVisibleRect(r) &&
+                            event.rawX >= r.left &&
+                            event.rawX < r.right &&
+                            event.rawY >= r.top &&
+                            event.rawY < r.bottom &&
+                            v.isShown &&
+                            v.isEnabled
+                        ) {
+                            touchTarget = v
+                            return true
+                        }
                     }
                 }
             }
+
             MotionEvent.ACTION_UP -> {
-                val v = touchTarget; touchTarget = null
-                if (v != null && v.isShown && v.isEnabled) { v.performClick(); return true }
+                val v = touchTarget
+                touchTarget = null
+
+                if (v != null && v.isShown && v.isEnabled) {
+                    v.performClick()
+                    return true
+                }
             }
-            MotionEvent.ACTION_CANCEL -> { touchTarget = null; return true }
+
+            MotionEvent.ACTION_CANCEL -> {
+                touchTarget = null
+                return true
+            }
         }
+
         return super.dispatchTouchEvent(event)
     }
+
     private fun findTabByTitle(parent: ViewGroup, title: String): View? {
         for (i in 0 until parent.childCount) {
             val child = parent.getChildAt(i)
+
             if (child is ViewGroup) {
                 for (j in 0 until child.childCount) {
                     val sub = child.getChildAt(j)
-                    if (sub is android.widget.TextView && sub.text?.toString() == title) return child
+
+                    if (
+                        sub is android.widget.TextView &&
+                        sub.text?.toString() == title
+                    ) {
+                        return child
+                    }
                 }
-                findTabByTitle(child, title)?.let { return it }
+
+                findTabByTitle(child, title)?.let {
+                    return it
+                }
             }
         }
+
         return null
     }
 }
