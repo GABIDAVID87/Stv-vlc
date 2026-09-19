@@ -82,9 +82,12 @@ class ExternalPlayerLauncher(private val activity: Activity) {
         }
 
     private fun normalizeUrl(raw: String): String {
+
         val url = raw.trim()
 
-        if (url.isBlank()) return ""
+        if (url.isBlank()) {
+            return ""
+        }
 
         if (url.startsWith("/video?")) {
             return WORKER + url
@@ -95,11 +98,13 @@ class ExternalPlayerLauncher(private val activity: Activity) {
         }
 
         if (url.startsWith("undefined/video?", true)) {
-            return WORKER + "/" + url.substringAfter("undefined/")
+            return WORKER + "/" +
+                    url.substringAfter("undefined/")
         }
 
         if (url.startsWith("null/video?", true)) {
-            return WORKER + "/" + url.substringAfter("null/")
+            return WORKER + "/" +
+                    url.substringAfter("null/")
         }
 
         if (
@@ -114,11 +119,16 @@ class ExternalPlayerLauncher(private val activity: Activity) {
     }
 
     /**
-     * Abre directamente el VideoPlayerActivity de VLC INTEGRADO
-     * dentro del mismo APK de Segovia TV.
+     * Abre la Activity puente de Segovia TV.
      *
-     * El Intent se construye directamente con la Activity concreta,
-     * sin ACTION_VIEW como Intent base y sin ComponentName.
+     * Esta Activity es la encargada de abrir después
+     * el VideoPlayerActivity de VLC integrado.
+     *
+     * Segovia TV
+     *      ↓
+     * SegoviaVideoPlayerActivity
+     *      ↓
+     * VLC VideoPlayerActivity integrado
      */
     private fun vlcPlayerIntent(
         url: String,
@@ -126,7 +136,7 @@ class ExternalPlayerLauncher(private val activity: Activity) {
     ): Intent =
         Intent(
             activity,
-            org.videolan.vlc.gui.video.VideoPlayerActivity::class.java
+            SegoviaVideoPlayerActivity::class.java
         ).apply {
 
             setDataAndType(
@@ -165,6 +175,7 @@ class ExternalPlayerLauncher(private val activity: Activity) {
         )
 
         if (count <= 0) {
+
             Toast.makeText(
                 activity,
                 "No hay capítulos para reproducir",
@@ -180,7 +191,8 @@ class ExternalPlayerLauncher(private val activity: Activity) {
 
         for (i in 0 until count) {
 
-            val url = normalizeUrl(urls[i])
+            val url =
+                normalizeUrl(urls[i])
 
             if (url.isBlank()) {
                 continue
@@ -202,6 +214,7 @@ class ExternalPlayerLauncher(private val activity: Activity) {
         }
 
         if (directUrls.isEmpty()) {
+
             Toast.makeText(
                 activity,
                 "No hay URLs de capítulos válidas",
@@ -213,86 +226,90 @@ class ExternalPlayerLauncher(private val activity: Activity) {
 
         val startIndex = 0
 
-        val firstUrl = directUrls[startIndex]
-        val firstTitle = directTitles[startIndex]
+        val firstUrl =
+            directUrls[startIndex]
 
-        val intent = vlcPlayerIntent(
-            firstUrl,
-            firstTitle
-        ).apply {
+        val firstTitle =
+            directTitles[startIndex]
 
-            putExtra(
-                EXTRA_CONTENT_TYPE,
-                "series"
-            )
-
-            putStringArrayListExtra(
-                EXTRA_SEGOVIA_URLS,
-                directUrls
-            )
-
-            putStringArrayListExtra(
-                EXTRA_SEGOVIA_TITLES,
-                directTitles
-            )
-
-            putStringArrayListExtra(
-                EXTRA_SEGOVIA_POSTERS,
-                directPosters
-            )
-
-            putExtra(
-                EXTRA_SEGOVIA_START_INDEX,
-                startIndex
-            )
-
-            if (!seriesTitle.isNullOrBlank()) {
+        val intent =
+            vlcPlayerIntent(
+                firstUrl,
+                firstTitle
+            ).apply {
 
                 putExtra(
-                    EXTRA_SERIES_TITLE,
-                    seriesTitle
+                    EXTRA_CONTENT_TYPE,
+                    "series"
+                )
+
+                putStringArrayListExtra(
+                    EXTRA_SEGOVIA_URLS,
+                    directUrls
+                )
+
+                putStringArrayListExtra(
+                    EXTRA_SEGOVIA_TITLES,
+                    directTitles
+                )
+
+                putStringArrayListExtra(
+                    EXTRA_SEGOVIA_POSTERS,
+                    directPosters
                 )
 
                 putExtra(
-                    EXTRA_SEGOVIA_SERIES_TITLE,
-                    seriesTitle
+                    EXTRA_SEGOVIA_START_INDEX,
+                    startIndex
                 )
+
+                if (!seriesTitle.isNullOrBlank()) {
+
+                    putExtra(
+                        EXTRA_SERIES_TITLE,
+                        seriesTitle
+                    )
+
+                    putExtra(
+                        EXTRA_SEGOVIA_SERIES_TITLE,
+                        seriesTitle
+                    )
+                }
+
+                if (season != null) {
+
+                    putExtra(
+                        EXTRA_SEASON,
+                        season.toString()
+                    )
+
+                    putExtra(
+                        EXTRA_SEGOVIA_SEASON,
+                        season
+                    )
+                }
+
+                if (episode != null) {
+
+                    putExtra(
+                        EXTRA_EPISODE,
+                        episode.toString()
+                    )
+
+                    putExtra(
+                        EXTRA_SEGOVIA_EPISODE,
+                        episode
+                    )
+                }
+
+                if (!bannerUrl.isNullOrBlank()) {
+
+                    putExtra(
+                        EXTRA_BANNER_URL,
+                        bannerUrl
+                    )
+                }
             }
-
-            if (season != null) {
-
-                putExtra(
-                    EXTRA_SEASON,
-                    season.toString()
-                )
-
-                putExtra(
-                    EXTRA_SEGOVIA_SEASON,
-                    season
-                )
-            }
-
-            if (episode != null) {
-
-                putExtra(
-                    EXTRA_EPISODE,
-                    episode.toString()
-                )
-
-                putExtra(
-                    EXTRA_SEGOVIA_EPISODE,
-                    episode
-                )
-            }
-
-            if (!bannerUrl.isNullOrBlank()) {
-
-                putExtra(
-                    EXTRA_BANNER_URL,
-                    bannerUrl
-                )
-            }
-        }
 
         try {
 
@@ -303,9 +320,17 @@ class ExternalPlayerLauncher(private val activity: Activity) {
 
         } catch (e: Exception) {
 
+            android.util.Log.e(
+                "SegoviaVLC",
+                "ERROR ABRIENDO SegoviaVideoPlayerActivity",
+                e
+            )
+
             Toast.makeText(
                 activity,
-                "No se pudo abrir el reproductor VLC integrado",
+                "Error Segovia Player: " +
+                        "${e.javaClass.simpleName}\n" +
+                        "${e.message}",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -324,7 +349,8 @@ class ExternalPlayerLauncher(private val activity: Activity) {
         nextEpisode: Int? = null
     ) {
 
-        val finalUrl = normalizeUrl(url)
+        val finalUrl =
+            normalizeUrl(url)
 
         if (finalUrl.isBlank()) {
 
@@ -337,56 +363,57 @@ class ExternalPlayerLauncher(private val activity: Activity) {
             return
         }
 
-        val intent = vlcPlayerIntent(
-            finalUrl,
-            title
-        ).apply {
-
-            putExtra(
-                EXTRA_CONTENT_TYPE,
-                "movie"
-            )
-
-            if (!bannerUrl.isNullOrBlank()) {
+        val intent =
+            vlcPlayerIntent(
+                finalUrl,
+                title
+            ).apply {
 
                 putExtra(
-                    EXTRA_BANNER_URL,
-                    bannerUrl
+                    EXTRA_CONTENT_TYPE,
+                    "movie"
                 )
+
+                if (!bannerUrl.isNullOrBlank()) {
+
+                    putExtra(
+                        EXTRA_BANNER_URL,
+                        bannerUrl
+                    )
+                }
+
+                if (!nextUrl.isNullOrBlank()) {
+
+                    putExtra(
+                        EXTRA_NEXT_URL,
+                        normalizeUrl(nextUrl)
+                    )
+                }
+
+                if (!nextTitle.isNullOrBlank()) {
+
+                    putExtra(
+                        EXTRA_NEXT_TITLE,
+                        nextTitle
+                    )
+                }
+
+                if (nextSeason != null) {
+
+                    putExtra(
+                        EXTRA_NEXT_SEASON,
+                        nextSeason
+                    )
+                }
+
+                if (nextEpisode != null) {
+
+                    putExtra(
+                        EXTRA_NEXT_EPISODE,
+                        nextEpisode
+                    )
+                }
             }
-
-            if (!nextUrl.isNullOrBlank()) {
-
-                putExtra(
-                    EXTRA_NEXT_URL,
-                    nextUrl
-                )
-            }
-
-            if (!nextTitle.isNullOrBlank()) {
-
-                putExtra(
-                    EXTRA_NEXT_TITLE,
-                    nextTitle
-                )
-            }
-
-            if (nextSeason != null) {
-
-                putExtra(
-                    EXTRA_NEXT_SEASON,
-                    nextSeason
-                )
-            }
-
-            if (nextEpisode != null) {
-
-                putExtra(
-                    EXTRA_NEXT_EPISODE,
-                    nextEpisode
-                )
-            }
-        }
 
         try {
 
@@ -394,9 +421,17 @@ class ExternalPlayerLauncher(private val activity: Activity) {
 
         } catch (e: Exception) {
 
+            android.util.Log.e(
+                "SegoviaVLC",
+                "ERROR ABRIENDO SegoviaVideoPlayerActivity",
+                e
+            )
+
             Toast.makeText(
                 activity,
-                "No se pudo abrir el reproductor VLC integrado",
+                "Error Segovia Player: " +
+                        "${e.javaClass.simpleName}\n" +
+                        "${e.message}",
                 Toast.LENGTH_LONG
             ).show()
         }
