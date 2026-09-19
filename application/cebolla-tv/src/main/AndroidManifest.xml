@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -26,6 +27,10 @@
 
         </provider>
 
+        <!-- ===================================================== -->
+        <!-- PANTALLA PRINCIPAL DE SEGOVIA TV                      -->
+        <!-- ===================================================== -->
+
         <activity
             android:name="com.segovia.tv.MainActivity"
             android:exported="true"
@@ -33,14 +38,23 @@
             android:theme="@style/Theme.SegoviaTV">
 
             <intent-filter>
+
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+
+                <category
+                    android:name="android.intent.category.LAUNCHER" />
+
+                <category
+                    android:name="android.intent.category.LEANBACK_LAUNCHER" />
+
             </intent-filter>
 
         </activity>
 
-        <!-- Puente de Segovia TV hacia el VLC integrado -->
+        <!-- ===================================================== -->
+        <!-- PUENTE DE SEGOVIA TV HACIA EL VLC INTEGRADO           -->
+        <!-- ===================================================== -->
+
         <activity
             android:name="com.segovia.tv.playback.SegoviaVideoPlayerActivity"
             android:exported="false"
