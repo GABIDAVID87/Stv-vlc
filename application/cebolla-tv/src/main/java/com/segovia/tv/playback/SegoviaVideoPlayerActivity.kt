@@ -15,14 +15,10 @@ class SegoviaVideoPlayerActivity : Activity() {
         private const val REQUEST_VLC_START = 7402
 
         /*
-         * StartActivity real de VLC.
+         * Activity de entrada de VLC.
          *
-         * Desde allí VLC hace:
-         *
-         * intent.setClass(
-         *     this@StartActivity,
-         *     VideoPlayerActivity::class.java
-         * )
+         * Esta clase está integrada dentro del mismo APK de
+         * Segovia TV mediante el módulo vlc-android.
          */
         private const val VLC_START_ACTIVITY =
             "org.videolan.vlc.StartActivity"
@@ -39,13 +35,12 @@ class SegoviaVideoPlayerActivity : Activity() {
         try {
 
             /*
-             * Intent que recibió Segovia TV desde
-             * ExternalPlayerLauncher.
+             * Intent original recibido por Segovia TV.
              */
             val originalIntent = intent
 
             /*
-             * La URL debe venir en data.
+             * La reproducción necesita una URI.
              */
             val videoUri: Uri =
                 originalIntent.data
@@ -54,32 +49,19 @@ class SegoviaVideoPlayerActivity : Activity() {
                     )
 
             /*
-             * Copiamos TODO el Intent original.
-             *
-             * Esto conserva:
-             *
-             * - URL
-             * - MIME type
-             * - EXTRA_TITLE
-             * - series_title
-             * - season
-             * - episode
-             * - poster
-             * - banner
-             * - lista de capítulos
-             * - extras de Segovia TV
-             * - etc.
+             * Copiamos el Intent original para conservar todos
+             * los extras enviados por Segovia TV.
              */
             val vlcIntent = Intent(originalIntent)
 
             /*
-             * VLC StartActivity espera ACTION_VIEW para entrar
-             * en startPlaybackFromApp().
+             * VLC StartActivity utiliza ACTION_VIEW para
+             * iniciar la reproducción externa.
              */
             vlcIntent.action = Intent.ACTION_VIEW
 
             /*
-             * Aseguramos que la URL y el MIME sean correctos.
+             * Aseguramos que VLC reciba la URI y el MIME.
              */
             vlcIntent.setDataAndType(
                 videoUri,
@@ -87,22 +69,29 @@ class SegoviaVideoPlayerActivity : Activity() {
             )
 
             /*
-             * Este es el componente integrado de VLC.
-             *
              * IMPORTANTE:
              *
-             * No estamos llamando a una aplicación VLC externa.
+             * StartActivity pertenece al módulo VLC integrado,
+             * pero el APK instalado es el APK de Segovia TV.
              *
-             * El package org.videolan.vlc corresponde al APK
-             * integrado que estamos construyendo.
+             * Por eso NO utilizamos:
+             *
+             * ComponentName("org.videolan.vlc", ...)
+             *
+             * ya que org.videolan.vlc es el namespace de VLC,
+             * no necesariamente el applicationId del APK final.
+             *
+             * Con este constructor Android busca la Activity
+             * dentro del mismo APK que está ejecutando esta Activity.
              */
             vlcIntent.component = ComponentName(
-                "org.videolan.vlc",
+                this,
                 VLC_START_ACTIVITY
             )
 
             /*
-             * Igual que el flujo externo de VLC.
+             * Indicamos a VLC que la reproducción procede
+             * de una aplicación externa.
              */
             vlcIntent.putExtra(
                 "from_external",
@@ -110,7 +99,7 @@ class SegoviaVideoPlayerActivity : Activity() {
             )
 
             /*
-             * Nos aseguramos de conservar el título.
+             * Conservamos explícitamente el título si existe.
              */
             originalIntent.getStringExtra(
                 Intent.EXTRA_TITLE
@@ -122,18 +111,31 @@ class SegoviaVideoPlayerActivity : Activity() {
                 )
             }
 
+            Log.d(
+                TAG,
+                "Abriendo VLC integrado"
+            )
+
+            Log.d(
+                TAG,
+                "URI: $videoUri"
+            )
+
+            Log.d(
+                TAG,
+                "MIME: ${vlcIntent.type}"
+            )
+
+            Log.d(
+                TAG,
+                "Component: ${vlcIntent.component}"
+            )
+
             /*
-             * Lanzamos StartActivity de VLC.
+             * Abrimos StartActivity de VLC.
              *
-             * StartActivity será quien haga internamente:
-             *
-             * startActivityForResult(
-             *     intent.setClass(
-             *         this@StartActivity,
-             *         VideoPlayerActivity::class.java
-             *     ),
-             *     ...
-             * )
+             * StartActivity será quien continúe el flujo
+             * interno hacia VideoPlayerActivity.
              */
             startActivityForResult(
                 vlcIntent,
@@ -150,7 +152,7 @@ class SegoviaVideoPlayerActivity : Activity() {
 
             Toast.makeText(
                 this,
-                "ERROR VLC: " +
+                "ERROR VLC:\n" +
                     "${e.javaClass.simpleName}\n" +
                     "${e.message}",
                 Toast.LENGTH_LONG
@@ -163,7 +165,6 @@ class SegoviaVideoPlayerActivity : Activity() {
         resultCode: Int,
         data: Intent?
     ) {
-
         super.onActivityResult(
             requestCode,
             resultCode,
@@ -173,8 +174,10 @@ class SegoviaVideoPlayerActivity : Activity() {
         if (requestCode == REQUEST_VLC_START) {
 
             /*
-             * Cuando VLC termine, devolvemos el resultado
-             * a Segovia TV.
+             * VLC terminó.
+             *
+             * Devolvemos el resultado a la Activity que
+             * abrió SegoviaVideoPlayerActivity.
              */
             setResult(
                 resultCode,
