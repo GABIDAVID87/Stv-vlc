@@ -1,6 +1,7 @@
 package com.segovia.tv.playback
 
 import android.app.Activity
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -34,7 +35,7 @@ class ExternalPlayerLauncher(private val activity: Activity) {
 
         const val EXTRA_SEGOVIA_SERIES_TITLE = "segovia_series_title"
         const val EXTRA_SEGOVIA_SEASON = "segovia_season"
-        const val EXTRA_SEGOVIA_EPISODE = "segovia_season"
+        const val EXTRA_SEGOVIA_EPISODE = "segovia_episode"
 
         const val EXTRA_SEGOVIA_PROGRESS_JSON = "segovia_progress_json"
     }
@@ -84,9 +85,7 @@ class ExternalPlayerLauncher(private val activity: Activity) {
     private fun normalizeUrl(raw: String): String {
         val url = raw.trim()
 
-        if (url.isBlank()) {
-            return ""
-        }
+        if (url.isBlank()) return ""
 
         if (url.startsWith("/video?")) {
             return WORKER + url
@@ -116,22 +115,22 @@ class ExternalPlayerLauncher(private val activity: Activity) {
     }
 
     /**
-     * Abre directamente la VideoPlayerActivity de VLC INTEGRADO
-     * dentro del mismo APK de Segovia TV.
+     * Abre directamente el VideoPlayerActivity de VLC integrado.
      *
-     * El Intent se construye directamente con Activity + clase.
-     *
-     * No se utiliza ComponentName ni un Intent ACTION_VIEW implícito
-     * para determinar qué aplicación debe reproducir el contenido.
+     * Se utiliza un Intent explícito mediante ComponentName.
+     * No se utiliza ACTION_VIEW como Intent base para esta llamada,
+     * evitando que Android busque otro reproductor externo.
      */
     private fun vlcPlayerIntent(
         url: String,
         title: String
     ): Intent =
-        Intent(
-            activity,
-            org.videolan.vlc.gui.video.VideoPlayerActivity::class.java
-        ).apply {
+        Intent().apply {
+
+            component = ComponentName(
+                "org.videolan.vlc",
+                "org.videolan.vlc.gui.video.VideoPlayerActivity"
+            )
 
             setDataAndType(
                 Uri.parse(url),
