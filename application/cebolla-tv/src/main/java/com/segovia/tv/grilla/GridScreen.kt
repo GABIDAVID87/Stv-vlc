@@ -63,26 +63,32 @@ class GridScreen(
             clipChildren = false
         }
 
+        // ZÓCALO SUPERIOR MÁS BAJO
+        val headerHeight = dp(36)
+
+        // COLUMNA LATERAL MÁS ANGOSTA
+        val sideWidth = dp(58)
+
         val header = TextView(activity).apply {
             text = "SEGOVIA TV"
             textSize = 26f
             gravity = Gravity.CENTER_VERTICAL
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.parseColor("#E8AA3B"))
-            setPadding(dp(30), 0, 0, 0)
+            setPadding(dp(26), 0, 0, 0)
             setBackgroundColor(Color.BLACK)
         }
 
         root.addView(
             header,
-            FrameLayout.LayoutParams(-1, dp(42))
+            FrameLayout.LayoutParams(-1, headerHeight)
         )
 
         val side = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             setBackgroundColor(Color.parseColor("#050505"))
-            setPadding(dp(5), dp(15), dp(5), dp(10))
+            setPadding(dp(4), dp(12), dp(4), dp(8))
         }
 
         fun menu(
@@ -136,7 +142,7 @@ class GridScreen(
             side.addView(
                 box,
                 LinearLayout.LayoutParams(
-                    dp(66),
+                    sideWidth,
                     dp(64)
                 )
             )
@@ -167,18 +173,18 @@ class GridScreen(
         root.addView(
             side,
             FrameLayout.LayoutParams(
-                dp(66),
+                sideWidth,
                 -1
             ).apply {
-                topMargin = dp(42)
+                topMargin = headerHeight
             }
         )
 
         val scroll = ScrollView(activity).apply {
             clipChildren = false
             layoutParams = FrameLayout.LayoutParams(-1, -1).apply {
-                leftMargin = dp(66)
-                topMargin = dp(42)
+                leftMargin = sideWidth
+                topMargin = headerHeight
             }
         }
 
@@ -389,6 +395,7 @@ class GridScreen(
         }
 
         activity.setContentView(root)
+
         header.bringToFront()
     }
 
