@@ -64,12 +64,7 @@ class GridScreen(
             clipChildren = false
         }
 
-        // ZÓCALO SUPERIOR
-        // SE MANTIENE EXACTAMENTE EN SU POSICIÓN
         val headerHeight = dp(36)
-
-        // COLUMNA LATERAL
-        // SE MANTIENE EXACTAMENTE EN SU POSICIÓN
         val sideWidth = dp(58)
 
         val header = TextView(activity).apply {
@@ -80,6 +75,8 @@ class GridScreen(
             setTextColor(Color.parseColor("#E8AA3B"))
             setPadding(dp(26), 0, 0, 0)
             setBackgroundColor(Color.BLACK)
+            // Corrección: Elevación estática para que la animación de la grilla (Z=4) pase por encima
+            translationZ = dp(1).toFloat()
         }
 
         root.addView(
@@ -92,6 +89,8 @@ class GridScreen(
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             setBackgroundColor(Color.parseColor("#050505"))
             setPadding(dp(4), dp(12), dp(4), dp(8))
+            // Corrección: Elevación estática para que la animación de la grilla (Z=4) pase por encima
+            translationZ = dp(1).toFloat()
         }
 
         fun menu(
@@ -188,10 +187,10 @@ class GridScreen(
             }
         )
 
-        // SCROLLVIEW
-        // NO SE MUEVE LA COLUMNA NI EL ZÓCALO
         val scroll = ScrollView(activity).apply {
             clipChildren = false
+            // Corrección: Permite que el resaltado invada el área del padding
+            clipToPadding = false
 
             layoutParams = FrameLayout.LayoutParams(
                 -1,
@@ -202,31 +201,25 @@ class GridScreen(
             }
         }
 
-        // GRILLA
-        // EL ÚNICO CAMBIO ES EL PADDING:
-        // UN POCO MÁS A LA DERECHA Y UN POCO MÁS ABAJO.
         val grid = GridLayout(activity).apply {
             columnCount = 8
 
             setPadding(
-                dp(20),   // antes 8: mueve la grilla a la derecha
-                dp(15),   // antes 5: mueve la grilla hacia abajo
+                dp(20),
+                dp(15),
                 dp(10),
                 dp(20)
             )
 
             clipChildren = false
+            // Corrección: Permite que el resaltado invada el área del padding
+            clipToPadding = false
         }
 
         val screen = activity.resources.displayMetrics.widthPixels
-
-        // SE MANTIENE IGUAL PARA NO CAMBIAR
-        // EL TAMAÑO DE LOS PÓSTERS
         val available = (screen - dp(100)).coerceAtLeast(dp(700))
-
         val gap = dp(6)
 
-        // NO SE MODIFICA EL TAMAÑO DE LOS PÓSTERS
         val posterW =
             ((available - gap * 7) / 8).coerceAtLeast(dp(100))
 
@@ -350,8 +343,6 @@ class GridScreen(
 
             card.addView(titleView)
 
-            // BORDE AMARILLO
-            // SE MANTIENE EXACTAMENTE IGUAL
             border = View(activity).apply {
 
                 layoutParams = FrameLayout.LayoutParams(
@@ -450,8 +441,6 @@ class GridScreen(
         }
 
         activity.setContentView(root)
-
-        header.bringToFront()
     }
 
     private fun navRoute(route: String) {
