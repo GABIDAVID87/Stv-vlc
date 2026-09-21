@@ -63,10 +63,10 @@ class GridScreen(
             clipChildren = false
         }
 
-        // ZÓCALO SUPERIOR MÁS BAJO
+        // ZÓCALO SUPERIOR
         val headerHeight = dp(36)
 
-        // COLUMNA LATERAL MÁS ANGOSTA
+        // COLUMNA LATERAL
         val sideWidth = dp(58)
 
         val header = TextView(activity).apply {
@@ -109,6 +109,7 @@ class GridScreen(
                     dp(25),
                     dp(26)
                 )
+
                 setIconColor(
                     if (active) Color.parseColor(UiUtils.GOLD)
                     else Color.WHITE
@@ -131,6 +132,7 @@ class GridScreen(
                 } else {
                     Color.WHITE
                 }
+
                 img.setIconColor(c)
                 label.setTextColor(c)
             }
@@ -154,19 +156,35 @@ class GridScreen(
             activity.onBackPressedDispatcher.onBackPressed()
         }
 
-        val movies = menu("PELÍCULAS", "movies", title == "Películas") {
+        val movies = menu(
+            "PELÍCULAS",
+            "movies",
+            title == "Películas"
+        ) {
             navRoute("Peliculas")
         }
 
-        val series = menu("SERIES", "series", title == "Series") {
+        val series = menu(
+            "SERIES",
+            "series",
+            title == "Series"
+        ) {
             navRoute("Series")
         }
 
-        val kids = menu("KIDS", "kids", title == "Kids") {
+        val kids = menu(
+            "KIDS",
+            "kids",
+            title == "Kids"
+        ) {
             navRoute("Kids")
         }
 
-        val exit = menu("SALIR", "exit", false) {
+        val exit = menu(
+            "SALIR",
+            "exit",
+            false
+        ) {
             activity.finishAffinity()
         }
 
@@ -180,41 +198,66 @@ class GridScreen(
             }
         )
 
+        /*
+         * GRILLA:
+         *
+         * Se desplaza 14dp a la derecha para dejar espacio
+         * al contorno amarillo cuando el primer póster recibe foco.
+         *
+         * También se desplaza 14dp hacia abajo para separar
+         * el contorno del zócalo "SEGOVIA TV".
+         */
         val scroll = ScrollView(activity).apply {
             clipChildren = false
-            layoutParams = FrameLayout.LayoutParams(-1, -1).apply {
-                leftMargin = sideWidth
-                topMargin = headerHeight
+
+            layoutParams = FrameLayout.LayoutParams(
+                -1,
+                -1
+            ).apply {
+                leftMargin = dp(72)
+                topMargin = dp(50)
             }
         }
 
         val grid = GridLayout(activity).apply {
             columnCount = 8
+
             setPadding(
                 dp(8),
                 dp(5),
                 dp(10),
                 dp(20)
             )
+
             clipChildren = false
         }
 
         val screen = activity.resources.displayMetrics.widthPixels
-        val available = (screen - dp(100)).coerceAtLeast(dp(700))
+
+        val available =
+            (screen - dp(100)).coerceAtLeast(dp(700))
+
         val gap = dp(6)
 
         // NO SE MODIFICA EL TAMAÑO DE LOS PÓSTERS
-        val posterW = ((available - gap * 7) / 8).coerceAtLeast(dp(100))
-        val posterH = (posterW * 1.38f).toInt()
+        val posterW =
+            ((available - gap * 7) / 8)
+                .coerceAtLeast(dp(100))
 
-        val cardH = posterH + dp(34)
+        val posterH =
+            (posterW * 1.38f).toInt()
+
+        val cardH =
+            posterH + dp(34)
 
         val cards = mutableListOf<View>()
 
         items.forEach { data ->
+
             lateinit var border: View
 
             val card = FrameLayout(activity).apply {
+
                 id = View.generateViewId()
 
                 isFocusable = true
@@ -223,29 +266,40 @@ class GridScreen(
 
                 clipChildren = false
 
-                layoutParams = GridLayout.LayoutParams().apply {
-                    width = posterW
-                    height = cardH
-                    setMargins(
-                        gap / 2,
-                        dp(4),
-                        gap / 2,
-                        dp(5)
-                    )
-                }
+                layoutParams =
+                    GridLayout.LayoutParams().apply {
+
+                        width = posterW
+                        height = cardH
+
+                        setMargins(
+                            gap / 2,
+                            dp(4),
+                            gap / 2,
+                            dp(5)
+                        )
+                    }
 
                 setOnFocusChangeListener { v, focus ->
+
                     if (focus) {
-                        border.visibility = View.VISIBLE
+
+                        border.visibility =
+                            View.VISIBLE
 
                         v.animate()
                             .scaleX(1.05f)
                             .scaleY(1.05f)
-                            .translationZ(dp(4).toFloat())
+                            .translationZ(
+                                dp(4).toFloat()
+                            )
                             .setDuration(150)
                             .start()
+
                     } else {
-                        border.visibility = View.GONE
+
+                        border.visibility =
+                            View.GONE
 
                         v.animate()
                             .scaleX(1f)
@@ -261,17 +315,26 @@ class GridScreen(
                 }
             }
 
-            val poster = RoundPosterImageView(activity).apply {
-                layoutParams = FrameLayout.LayoutParams(
-                    posterW,
-                    posterH
-                )
-                scaleType = ImageView.ScaleType.CENTER_CROP
-            }
+            val poster =
+                RoundPosterImageView(activity).apply {
+
+                    layoutParams =
+                        FrameLayout.LayoutParams(
+                            posterW,
+                            posterH
+                        )
+
+                    scaleType =
+                        ImageView.ScaleType.CENTER_CROP
+                }
 
             val url = when {
-                data.movie != null -> data.movie.posterUrl
-                data.series != null -> data.series.posterUrl
+                data.movie != null ->
+                    data.movie.posterUrl
+
+                data.series != null ->
+                    data.series.posterUrl
+
                 else -> ""
             }
 
@@ -284,54 +347,85 @@ class GridScreen(
 
             card.addView(poster)
 
-            val titleView = TextView(activity).apply {
-                text = when {
-                    data.movie != null -> name(data.movie.titulo)
-                    data.series != null -> name(data.series.titulo)
-                    else -> ""
+            val titleView =
+                TextView(activity).apply {
+
+                    text = when {
+                        data.movie != null ->
+                            name(data.movie.titulo)
+
+                        data.series != null ->
+                            name(data.series.titulo)
+
+                        else -> ""
+                    }
+
+                    textSize = 10f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+
+                    maxLines = 2
+                    ellipsize =
+                        TextUtils.TruncateAt.END
+
+                    includeFontPadding = false
+
+                    layoutParams =
+                        FrameLayout.LayoutParams(
+                            posterW,
+                            dp(32)
+                        ).apply {
+                            topMargin =
+                                posterH + dp(2)
+                        }
                 }
-
-                textSize = 10f
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-
-                maxLines = 2
-                ellipsize = TextUtils.TruncateAt.END
-                includeFontPadding = false
-
-                layoutParams = FrameLayout.LayoutParams(
-                    posterW,
-                    dp(32)
-                ).apply {
-                    topMargin = posterH + dp(2)
-                }
-            }
 
             card.addView(titleView)
 
+            /*
+             * CONTORNO AMARILLO
+             *
+             * Conservamos exactamente el tamaño
+             * y la animación originales.
+             */
             border = View(activity).apply {
-                layoutParams = FrameLayout.LayoutParams(
-                    posterW + dp(8),
-                    cardH + dp(8)
-                ).apply {
-                    leftMargin = -dp(4)
-                    topMargin = -dp(4)
-                }
 
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    setColor(Color.TRANSPARENT)
-                    setStroke(
-                        dp(3),
-                        Color.parseColor("#FFD54F")
-                    )
-                    cornerRadius = dp(10).toFloat()
-                }
+                layoutParams =
+                    FrameLayout.LayoutParams(
+                        posterW + dp(8),
+                        cardH + dp(8)
+                    ).apply {
+
+                        leftMargin = -dp(4)
+                        topMargin = -dp(4)
+                    }
+
+                background =
+                    GradientDrawable().apply {
+
+                        shape =
+                            GradientDrawable.RECTANGLE
+
+                        setColor(
+                            Color.TRANSPARENT
+                        )
+
+                        setStroke(
+                            dp(3),
+                            Color.parseColor(
+                                "#FFD54F"
+                            )
+                        )
+
+                        cornerRadius =
+                            dp(10).toFloat()
+                    }
 
                 visibility = View.GONE
             }
 
             card.addView(border)
+
             border.bringToFront()
 
             grid.addView(card)
@@ -339,11 +433,16 @@ class GridScreen(
         }
 
         grid.post {
+
             cards.forEachIndexed { index, v ->
+
                 val col = index % 8
 
                 v.nextFocusRightId =
-                    if (col < 7 && index + 1 < cards.size) {
+                    if (
+                        col < 7 &&
+                        index + 1 < cards.size
+                    ) {
                         cards[index + 1].id
                     } else {
                         v.id
@@ -389,6 +488,7 @@ class GridScreen(
         exit.nextFocusUpId = kids.id
 
         cards.firstOrNull()?.let {
+
             movies.nextFocusRightId = it.id
             series.nextFocusRightId = it.id
             kids.nextFocusRightId = it.id
@@ -400,6 +500,7 @@ class GridScreen(
     }
 
     private fun navRoute(route: String) {
-        (activity as? com.segovia.tv.MainActivity)?.navigate(route)
+        (activity as? com.segovia.tv.MainActivity)
+            ?.navigate(route)
     }
 }
