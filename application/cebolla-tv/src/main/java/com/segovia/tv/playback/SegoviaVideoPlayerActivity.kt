@@ -11,17 +11,43 @@ import android.widget.Toast
 class SegoviaVideoPlayerActivity : Activity() {
 
     companion object {
+
         private const val TAG = "SegoviaVLC"
+
         private const val REQUEST_VLC_START = 7402
 
         /*
-         * Activity de entrada de VLC.
-         *
-         * Esta clase está integrada dentro del mismo APK de
-         * Segovia TV mediante el módulo vlc-android.
+         * Activity de entrada de VLC integrada dentro
+         * del mismo APK de Segovia TV.
          */
         private const val VLC_START_ACTIVITY =
             "org.videolan.vlc.StartActivity"
+
+        /*
+         * VLC VideoPlayerActivity utiliza actualmente
+         * esta clave para recibir el título del vídeo.
+         *
+         * MUY IMPORTANTE:
+         *
+         * Intent.EXTRA_TITLE = "android.intent.extra.TITLE"
+         *
+         * NO es la clave que utiliza VideoPlayerActivity
+         * para el título de reproducción externa.
+         *
+         * VLC espera:
+         *
+         *     "title"
+         */
+        private const val VLC_TITLE_EXTRA = "title"
+
+        /*
+         * Algunas versiones anteriores de VLC utilizaron
+         * "item_title".
+         *
+         * Lo enviamos también para mantener compatibilidad
+         * sin perjudicar la versión actual.
+         */
+        private const val VLC_ITEM_TITLE_EXTRA = "item_title"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,12 +61,12 @@ class SegoviaVideoPlayerActivity : Activity() {
         try {
 
             /*
-             * Intent original recibido por Segovia TV.
+             * Intent original recibido desde Segovia TV.
              */
             val originalIntent = intent
 
             /*
-             * La reproducción necesita una URI.
+             * URL del capítulo/película.
              */
             val videoUri: Uri =
                 originalIntent.data
@@ -49,19 +75,41 @@ class SegoviaVideoPlayerActivity : Activity() {
                     )
 
             /*
-             * Copiamos el Intent original para conservar todos
-             * los extras enviados por Segovia TV.
+             * Recuperamos el título enviado por
+             * ExternalPlayerLauncher.
+             *
+             * ExternalPlayerLauncher ya utiliza:
+             *
+             * Intent.EXTRA_TITLE
+             *
+             * Por lo tanto lo leemos desde ahí.
+             */
+            val title =
+                originalIntent.getStringExtra(
+                    Intent.EXTRA_TITLE
+                )?.trim()
+
+            /*
+             * Copiamos el Intent original para conservar
+             * todos los extras de Segovia TV:
+             *
+             * - series
+             * - temporada
+             * - capítulo
+             * - playlist
+             * - posters
+             * - progreso
+             * - etc.
              */
             val vlcIntent = Intent(originalIntent)
 
             /*
-             * VLC StartActivity utiliza ACTION_VIEW para
-             * iniciar la reproducción externa.
+             * VLC StartActivity espera ACTION_VIEW.
              */
             vlcIntent.action = Intent.ACTION_VIEW
 
             /*
-             * Aseguramos que VLC reciba la URI y el MIME.
+             * URI y MIME.
              */
             vlcIntent.setDataAndType(
                 videoUri,
@@ -69,20 +117,16 @@ class SegoviaVideoPlayerActivity : Activity() {
             )
 
             /*
-             * IMPORTANTE:
+             * StartActivity pertenece al módulo VLC integrado.
              *
-             * StartActivity pertenece al módulo VLC integrado,
-             * pero el APK instalado es el APK de Segovia TV.
+             * NO usamos:
              *
-             * Por eso NO utilizamos:
+             * ComponentName(
+             *     "org.videolan.vlc",
+             *     VLC_START_ACTIVITY
+             * )
              *
-             * ComponentName("org.videolan.vlc", ...)
-             *
-             * ya que org.videolan.vlc es el namespace de VLC,
-             * no necesariamente el applicationId del APK final.
-             *
-             * Con este constructor Android busca la Activity
-             * dentro del mismo APK que está ejecutando esta Activity.
+             * porque el APK final es Segovia TV.
              */
             vlcIntent.component = ComponentName(
                 this,
@@ -90,8 +134,8 @@ class SegoviaVideoPlayerActivity : Activity() {
             )
 
             /*
-             * Indicamos a VLC que la reproducción procede
-             * de una aplicación externa.
+             * Indicamos que la reproducción viene
+             * desde una aplicación externa.
              */
             vlcIntent.putExtra(
                 "from_external",
@@ -99,15 +143,64 @@ class SegoviaVideoPlayerActivity : Activity() {
             )
 
             /*
-             * Conservamos explícitamente el título si existe.
+             * =====================================================
+             * CORRECCIÓN IMPORTANTE DEL TÍTULO
+             * =====================================================
+             *
+             * Segovia TV recibe el título mediante:
+             *
+             *     Intent.EXTRA_TITLE
+             *
+             * pero VLC VideoPlayerActivity espera:
+             *
+             *     "title"
+             *
+             * Si no mandamos "title", cuando VLC encuentra
+             * nuevamente la misma URL en MediaLibrary puede
+             * terminar mostrando:
+             *
+             *     video?id=XXXXXXXX
+             *
+             * en lugar del nombre del capítulo.
              */
-            originalIntent.getStringExtra(
-                Intent.EXTRA_TITLE
-            )?.let { title ->
 
+            if (!title.isNullOrBlank()) {
+
+                /*
+                 * Conservamos el extra Android original.
+                 */
                 vlcIntent.putExtra(
                     Intent.EXTRA_TITLE,
                     title
+                )
+
+                /*
+                 * CLAVE QUE VLC UTILIZA REALMENTE.
+                 */
+                vlcIntent.putExtra(
+                    VLC_TITLE_EXTRA,
+                    title
+                )
+
+                /*
+                 * Compatibilidad con versiones anteriores
+                 * de VLC que utilizaban "item_title".
+                 */
+                vlcIntent.putExtra(
+                    VLC_ITEM_TITLE_EXTRA,
+                    title
+                )
+
+                Log.d(
+                    TAG,
+                    "Título enviado a VLC: $title"
+                )
+
+            } else {
+
+                Log.w(
+                    TAG,
+                    "La reproducción no recibió título"
                 )
             }
 
@@ -128,14 +221,24 @@ class SegoviaVideoPlayerActivity : Activity() {
 
             Log.d(
                 TAG,
+                "Título: $title"
+            )
+
+            Log.d(
+                TAG,
+                "VLC title extra: " +
+                    vlcIntent.getStringExtra(
+                        VLC_TITLE_EXTRA
+                    )
+            )
+
+            Log.d(
+                TAG,
                 "Component: ${vlcIntent.component}"
             )
 
             /*
              * Abrimos StartActivity de VLC.
-             *
-             * StartActivity será quien continúe el flujo
-             * interno hacia VideoPlayerActivity.
              */
             startActivityForResult(
                 vlcIntent,
@@ -176,8 +279,7 @@ class SegoviaVideoPlayerActivity : Activity() {
             /*
              * VLC terminó.
              *
-             * Devolvemos el resultado a la Activity que
-             * abrió SegoviaVideoPlayerActivity.
+             * Devolvemos el resultado a Segovia TV.
              */
             setResult(
                 resultCode,
