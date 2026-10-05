@@ -7,9 +7,6 @@ package com.segovia.tv.series
  * S01E01 -> temporada 1, capítulo 1
  * S02E36 -> temporada 2, capítulo 36
  * S03E01 -> temporada 3, capítulo 1
- *
- * El número usado para buscar la sinopsis es SIEMPRE E##.
- * No se suma ningún offset por temporada.
  */
 data class SegoviaEpisodeInfo(
     val temporada: Int,
@@ -41,10 +38,16 @@ object SegoviaEpisodeParser {
     /**
      * Devuelve la clave exacta para buscar la sinopsis.
      *
-     * S02E36 -> "36"
+     * S01E01 -> "S01E01"
+     * S02E36 -> "S02E36"
+     * S03E01 -> "S03E01"
      */
-    fun synopsisKey(nombreVideo: String): String? =
-        parse(nombreVideo)?.episodio?.toString()
+    fun synopsisKey(nombreVideo: String): String? {
+        val datos = parse(nombreVideo) ?: return null
+
+        return "S${datos.temporada.toString().padStart(2, '0')}" +
+                "E${datos.episodio.toString().padStart(2, '0')}"
+    }
 
     fun chapterNumber(nombreVideo: String): Int? =
         parse(nombreVideo)?.episodio
@@ -65,9 +68,9 @@ data class SegoviaSynopsisItem(
 )
 
 /**
- * Busca la sinopsis usando directamente el número de E##.
+ * Busca la sinopsis usando la clave S##E##.
  *
- * S02E36 -> synopsis["36"]
+ * S02E36 -> synopsis["S02E36"]
  */
 fun buscarSinopsisSegovia(
     nombreVideo: String,
@@ -79,29 +82,3 @@ fun buscarSinopsisSegovia(
 
     return synopsis[key]
 }
-
-/*
- * EJEMPLO:
- *
- * val nombre = "Dragon Ball Z - S02E36 - Mi capítulo.mp4"
- *
- * val datos = SegoviaEpisodeParser.parse(nombre)
- *
- * datos?.let {
- *     Log.d("SegoviaTV", "Temporada: ${it.temporada}")
- *     Log.d("SegoviaTV", "Capítulo: ${it.episodio}")
- * }
- *
- * val info = buscarSinopsisSegovia(nombre, synopsis)
- *
- * val titulo = info?.titulo.orEmpty()
- * val sinopsis = info?.sinopsis.orEmpty()
- *
- * Resultado:
- *
- * temporada = 2
- * episodio = 36
- * clave de sinopsis = "36"
- *
- * No convierte 36 en 71.
- */
