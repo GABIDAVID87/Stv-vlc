@@ -18,6 +18,7 @@ class ContentRepository(
 ) {
 
     companion object {
+
         const val CATALOG_URL =
             "https://segovia-tv-proxy.guadianesgalaxi.workers.dev/catalog"
 
@@ -206,6 +207,7 @@ class ContentRepository(
                 "Accept",
                 "application/json"
             )
+
             c.setRequestProperty(
                 "Cache-Control",
                 "no-cache"
@@ -378,9 +380,6 @@ class ContentRepository(
                     o.optString("t")
                 )
 
-            // Resolvemos primero el póster GENERAL de la serie.
-            // La temporada puede usarlo como fallback, pero no se fija
-            // permanentemente a él.
             val poster =
                 o.optString(
                     "posterUrl",
@@ -463,6 +462,21 @@ class ContentRepository(
         val list =
             mutableListOf<Temporada>()
 
+        val isSpecialSeries =
+            serieTitulo
+                .trimStart()
+                .startsWith("#")
+
+        val cleanSerieName =
+            serieTitulo
+                .substringBefore("(")
+                .replace(".", " ")
+                .replace("_", " ")
+                .trim()
+                .removePrefix("#")
+                .trim()
+                .lowercase()
+
         for (i in 0 until a.length()) {
 
             val o =
@@ -484,18 +498,6 @@ class ContentRepository(
                     )
                 )
 
-            // IMPORTANTE:
-            // Para buscar sinopsis mantenemos el nombre interno
-            // con espacios, igual que el Worker.
-
-            val cleanSerieName =
-                serieTitulo
-                    .substringBefore("(")
-                    .replace(".", " ")
-                    .replace("_", " ")
-                    .trim()
-                    .lowercase()
-
             val seasonKey =
                 "$cleanSerieName-s${
                     String.format(
@@ -507,36 +509,118 @@ class ContentRepository(
             val seasonKeyAlt =
                 "$cleanSerieName-s$seasonNum"
 
-            var seasonDataObject:
-                    JSONObject? = null
-
-            var directPosterUrl:
-                    String? = null
+            var seasonDataObject: JSONObject? = null
+            var directPosterUrl: String? = null
 
             if (synopsisMap != null) {
 
-                val matchedObj =
-                    synopsisMap.optJSONObject(
-                        seasonKey
-                    )
-                        ?: synopsisMap.optJSONObject(
-                            seasonKeyAlt
+                if (isSpecialSeries) {
+
+                    /*
+                     * SERIES ESPECIALES
+                     *
+                     * Estructura:
+                     *
+                     * dragon ball z
+                     *   temporadas
+                     *     numero: 1
+                     *     episodios:
+                     *       S01E01: {...}
+                     */
+
+                    val specialSerie =
+                        synopsisMap.optJSONObject(
+                            cleanSerieName
                         )
 
-                if (matchedObj != null) {
+                    if (specialSerie != null) {
 
-                    seasonDataObject =
-                        matchedObj.optJSONObject(
-                            "sinopsis"
-                        )
+                        directPosterUrl =
+                            specialSerie
+                                .optString(
+                                    "posterUrl",
+                                    ""
+                                )
+                                .takeIf {
+                                    it.isNotBlank()
+                                }
 
-                    directPosterUrl =
-                        matchedObj.optString(
-                            "posterUrl",
-                            ""
-                        ).takeIf {
-                            it.isNotBlank()
+                        val temporadasEspeciales =
+                            specialSerie.optJSONArray(
+                                "temporadas"
+                            )
+
+                        if (temporadasEspeciales != null) {
+
+                            for (k in 0 until temporadasEspeciales.length()) {
+
+                                val temp =
+                                    temporadasEspeciales.optJSONObject(k)
+                                        ?: continue
+
+                                val numeroTemp =
+                                    temp.optInt(
+                                        "numero",
+                                        -1
+                                    )
+
+                                if (numeroTemp == seasonNum) {
+
+                                    seasonDataObject =
+                                        temp.optJSONObject(
+                                            "episodios"
+                                        )
+
+                                    if (
+                                        directPosterUrl.isNullOrBlank()
+                                    ) {
+
+                                        directPosterUrl =
+                                            temp.optString(
+                                                "posterUrl",
+                                                ""
+                                            ).takeIf {
+                                                it.isNotBlank()
+                                            }
+                                    }
+
+                                    break
+                                }
+                            }
                         }
+                    }
+
+                } else {
+
+                    /*
+                     * SERIES NORMALES
+                     *
+                     * Se mantiene el mecanismo anterior.
+                     */
+
+                    val matchedObj =
+                        synopsisMap.optJSONObject(
+                            seasonKey
+                        )
+                            ?: synopsisMap.optJSONObject(
+                                seasonKeyAlt
+                            )
+
+                    if (matchedObj != null) {
+
+                        seasonDataObject =
+                            matchedObj.optJSONObject(
+                                "sinopsis"
+                            )
+
+                        directPosterUrl =
+                            matchedObj.optString(
+                                "posterUrl",
+                                ""
+                            ).takeIf {
+                                it.isNotBlank()
+                            }
+                    }
                 }
             }
 
@@ -548,21 +632,66 @@ class ContentRepository(
                     ?: o.optJSONArray("caps")
                     ?: JSONArray()
 
+            /*
+             * Para Dragon Ball Z necesitamos conocer
+             * las claves SxxEyy del JSON especial.
+             */
+
+            val specialEpisodeKeys =
+                mutableListOf<String>()
+
+            if (
+                isSpecialSeries &&
+                seasonDataObject != null
+            ) {
+
+                val keys =
+                    seasonDataObject.keys()
+
+                while (keys.hasNext()) {
+
+                    val key =
+                        keys.next()
+
+                    if (
+                        Regex(
+                            "S\\d+E\\d+",
+                            RegexOption.IGNORE_CASE
+                        ).matches(key)
+                    ) {
+
+                        specialEpisodeKeys.add(key)
+                    }
+                }
+
+                specialEpisodeKeys.sortWith(
+                    compareBy {
+
+                        Regex(
+                            "S\\d+E(\\d+)",
+                            RegexOption.IGNORE_CASE
+                        )
+                            .find(it)
+                            ?.groupValues
+                            ?.getOrNull(1)
+                            ?.toIntOrNull()
+                            ?: Int.MAX_VALUE
+                    }
+                )
+            }
+
             for (j in 0 until ca.length()) {
 
                 val c =
                     ca.optJSONObject(j)
                         ?: continue
 
-                val tituloCap =
+                val tituloOriginal =
                     c.optString(
                         "titulo",
                         c.optString("t")
                     )
 
-                // La clave de sinopsis es el número REAL E## del archivo.
-                // Ejemplo: S02E36 -> "36", no "1" ni "71".
-                // Cada temporada puede continuar o reiniciar la numeración.
                 val streamUrl =
                     c.optString(
                         "streamUrl",
@@ -570,68 +699,186 @@ class ContentRepository(
                     )
 
                 val episodeRegex =
-                    Regex("S(\\d+)E(\\d+)", RegexOption.IGNORE_CASE)
+                    Regex(
+                        "S(\\d+)E(\\d+)",
+                        RegexOption.IGNORE_CASE
+                    )
 
-                val episodioDesdeNombre =
-                    episodeRegex.find(streamUrl)?.groupValues?.getOrNull(2)?.toIntOrNull()
-                        ?: episodeRegex.find(tituloCap)?.groupValues?.getOrNull(2)?.toIntOrNull()
+                var episodioReal =
+                    episodeRegex
+                        .find(streamUrl)
+                        ?.groupValues
+                        ?.getOrNull(2)
+                        ?.toIntOrNull()
+                        ?: episodeRegex
+                            .find(tituloOriginal)
+                            ?.groupValues
+                            ?.getOrNull(2)
+                            ?.toIntOrNull()
 
-                val episodioReal =
-                    episodioDesdeNombre
-                        ?: run {
-                            // En las series especiales, si el catálogo no conserva
-                            // SxxEyy en el nombre/URL, usamos las claves reales del
-                            // temporada.json en orden numérico.
-                            // Ejemplo S02: S02E36, S02E37, S02E38...
-                            val keys = mutableListOf<String>()
-                            if (seasonDataObject != null) {
-                                val keyIterator = seasonDataObject.keys()
-                                while (keyIterator.hasNext()) {
-                                    val key = keyIterator.next()
-                                    if (Regex("S${String.format("%02d", seasonNum)}E\\d+", RegexOption.IGNORE_CASE).matches(key)) {
-                                        keys.add(key)
-                                    }
-                                }
-                            }
+                /*
+                 * Si es una serie especial y el catálogo no
+                 * trae SxxEyy en el nombre, usamos directamente
+                 * la clave del JSON.
+                 */
+                if (
+                    isSpecialSeries &&
+                    episodioReal == null &&
+                    j < specialEpisodeKeys.size
+                ) {
 
-                            keys.sortBy {
-                                Regex("E(\\d+)", RegexOption.IGNORE_CASE)
-                                    .find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: Int.MAX_VALUE
-                            }
+                    episodioReal =
+                        Regex(
+                            "S\\d+E(\\d+)",
+                            RegexOption.IGNORE_CASE
+                        )
+                            .find(
+                                specialEpisodeKeys[j]
+                            )
+                            ?.groupValues
+                            ?.getOrNull(1)
+                            ?.toIntOrNull()
+                }
 
-                            keys.getOrNull(j)
-                                ?.let { key ->
-                                    Regex("E(\\d+)", RegexOption.IGNORE_CASE)
-                                        .find(key)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                                }
-                                ?: (j + 1)
-                        }
+                if (episodioReal == null) {
+                    episodioReal = j + 1
+                }
 
                 val seasonEpisodeKey =
-                    "S${String.format("%02d", seasonNum)}E${String.format("%02d", episodioReal)}"
+                    "S${String.format(
+                        "%02d",
+                        seasonNum
+                    )}E${String.format(
+                        "%02d",
+                        episodioReal
+                    )}"
 
-                // Los JSON nuevos usan claves SxxEyy: S01E01, S02E36, S03E108.
-                // Conservamos el número simple como compatibilidad con JSON antiguos.
-                val epNumStr = episodioReal.toString()
+                val epNumStr =
+                    episodioReal.toString()
 
-                var resolvedSinopsis = SYNOPSIS_DEFAULT
+                /*
+                 * Para series especiales mostramos:
+                 *
+                 * S02E36 Título
+                 *
+                 * cuando el catálogo no lo trae ya.
+                 */
+                 val tituloCap =
+                    if (
+                        isSpecialSeries &&
+                        !episodeRegex.containsMatchIn(
+                            tituloOriginal
+                        ) &&
+                        !episodeRegex.containsMatchIn(
+                            streamUrl
+                        )
+                    ) {
+
+                        "$seasonEpisodeKey $tituloOriginal"
+                            .trim()
+
+                    } else {
+
+                        tituloOriginal
+                    }
+
+                var resolvedSinopsis =
+                    SYNOPSIS_DEFAULT
 
                 if (seasonDataObject != null) {
-                    val episodioObject =
-                        seasonDataObject.optJSONObject(seasonEpisodeKey)
-                            ?: seasonDataObject.optJSONObject(epNumStr)
 
-                    if (episodioObject != null) {
+                    /*
+                     * JSON nuevo:
+                     *
+                     * "S02E36": {
+                     *   "titulo": "...",
+                     *   "sinopsis": "...",
+                     *   "edad": "...",
+                     *   "duracion": "...",
+                     *   "fecha": "..."
+                     * }
+                     */
+
+                    val entry =
+                        seasonDataObject.opt(
+                            seasonEpisodeKey
+                        )
+
+                    if (entry is JSONObject) {
+
                         resolvedSinopsis =
-                            episodioObject.optString("sinopsis", "").trim()
-                    } else {
-                        resolvedSinopsis =
-                            seasonDataObject.optString(
-                                seasonEpisodeKey,
-                                seasonDataObject.optString(epNumStr, "")
+                            entry.optString(
+                                "sinopsis",
+                                ""
                             ).trim()
+
+                    } else if (entry is String) {
+
+                        /*
+                         * Compatibilidad con JSON antiguo.
+                         */
+
+                        resolvedSinopsis =
+                            entry.trim()
+                    }
+
+                    /*
+                     * Compatibilidad adicional con claves
+                     * numéricas antiguas.
+                     */
+
+                    if (
+                        resolvedSinopsis.isBlank()
+                    ) {
+
+                        val oldEntry =
+                            seasonDataObject.opt(
+                                epNumStr
+                            )
+
+                        if (oldEntry is JSONObject) {
+
+                            resolvedSinopsis =
+                                oldEntry.optString(
+                                    "sinopsis",
+                                    ""
+                                ).trim()
+
+                        } else if (
+                            oldEntry is String
+                        ) {
+
+                            resolvedSinopsis =
+                                oldEntry.trim()
+                        }
+                    }
+
+                    /*
+                     * Algunos JSON antiguos podían usar
+                     * directamente el título como clave.
+                     */
+
+                    if (
+                        resolvedSinopsis.isBlank()
+                    ) {
+
+                        val oldTitle =
+                            seasonDataObject.optString(
+                                tituloOriginal,
+                                ""
+                            ).trim()
+
+                        if (oldTitle.isNotBlank()) {
+                            resolvedSinopsis =
+                                oldTitle
+                        }
                     }
                 }
+
+                /*
+                 * Si el capítulo trae su propia sinopsis,
+                 * la usamos como último fallback.
+                 */
 
                 if (
                     resolvedSinopsis.isBlank() ||
@@ -663,14 +910,6 @@ class ContentRepository(
                 )
             }
 
-            // Prioridad:
-            // 1) póster específico del Worker de temporada;
-            // 2) póster específico de la temporada en el catálogo;
-            // 3) póster general de la serie como fallback.
-            //
-            // En cada refresh esta prioridad se vuelve a evaluar.
-            // Por eso, si hoy no existe póster de temporada y mañana
-            // aparece, deja de utilizarse el póster de la serie.
             val catalogSeasonPoster =
                 o.optString(
                     "posterUrl",
@@ -678,8 +917,15 @@ class ContentRepository(
                 ).trim()
 
             val poster =
-                directPosterUrl?.trim()?.takeIf { it.isNotBlank() }
-                    ?: catalogSeasonPoster.takeIf { it.isNotBlank() }
+                directPosterUrl
+                    ?.trim()
+                    ?.takeIf {
+                        it.isNotBlank()
+                    }
+                    ?: catalogSeasonPoster
+                        .takeIf {
+                            it.isNotBlank()
+                        }
                     ?: seriePoster
 
             list.add(
@@ -838,5 +1084,8 @@ class ContentRepository(
             .substringBefore("(")
             .replace("_", " ")
             .trim()
+            .removePrefix("#")
+            .trim()
     }
 }
+    
