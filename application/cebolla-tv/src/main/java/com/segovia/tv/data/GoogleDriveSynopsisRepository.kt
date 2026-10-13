@@ -110,8 +110,10 @@ internal class GoogleDriveSynopsisRepository {
         val claim = b64(JSONObject().put("iss", CLIENT_EMAIL).put("scope", "https://www.googleapis.com/auth/drive.readonly")
             .put("aud", TOKEN_URL).put("iat", now).put("exp", now + 3600).toString())
         val unsigned = "$header.$claim"
-        val pem = PRIVATE_KEY_PEM.replace("-----BEGIN PRIVATE KEY-----", "")
-            .replace("-----END PRIVATE KEY-----", "").replace("\s".toRegex(), "")
+        val pem = PRIVATE_KEY_PEM
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace("\\s".toRegex(), "")
         val keyBytes = Base64.decode(pem, Base64.DEFAULT)
         val privateKey = KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(keyBytes))
         val signer = Signature.getInstance("SHA256withRSA")
